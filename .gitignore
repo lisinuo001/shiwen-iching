@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# PyInstaller build
+build/
+dist/
+*.spec.bak
+
+# Installer output (large binaries)
+installer/
+
+# Test / temp files
+test_*.py
+test_*.txt
+test_*.png
+gen_*.py
+check_*.py
+chk.py
+show_ic.py
+verify_keys.py
+compare_keys.py
+fix_iching_data.py
+append_helper.py
+_gen.py
+gen_yaoci*.py
+gen_keys.py
+gen_icon.py
+build.bat
+build_log.txt
+setup.iss
+inno_setup_installer.exe
+iching_data.pyc
+
+# Kivy build artifacts
+kivy_app/.buildozer/
+kivy_app/bin/

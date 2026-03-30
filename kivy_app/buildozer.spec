@@ -10,7 +10,7 @@ source.include_patterns = iching_data.py,yaoci_data.py
 
 version = 2.2.0
 
-requirements = python3,kivy==2.3.0
+requirements = python3,kivy==2.2.1,pillow
 
 orientation = portrait
 fullscreen = 0

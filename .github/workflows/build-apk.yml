@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:   # 手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,43 +13,22 @@ jobs:
       - name: Checkout 代码
         uses: actions/checkout@v4
 
-      - name: 安装 Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: 安装系统依赖
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip curl \
-            openjdk-17-jdk \
-            autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev \
-            cmake libffi-dev libssl-dev \
-            libltdl-dev libgdbm-dev libbz2-dev \
-            python3-pip python3-dev \
-            ccache lld
-
-      - name: 安装 buildozer 和依赖
-        run: |
-          pip install --upgrade pip wheel setuptools
-          pip install "buildozer==1.5.0" "cython==0.29.37"
-          pip install "kivy==2.3.0"
-
       - name: 复制数据文件到 kivy_app
         run: |
           cp iching_data.py kivy_app/
           cp yaoci_data.py  kivy_app/
 
-      - name: 构建 APK
-        working-directory: kivy_app
-        run: |
-          buildozer -v android debug
+      - name: 构建 APK（使用官方 buildozer action）
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          workdir: kivy_app
+          buildozer_version: stable
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: 筮问-ShiWen-v2.2.0-debug.apk
-          path: kivy_app/bin/*.apk
+          name: ShiWen-v2.2.0-debug
+          path: ${{ steps.buildozer.outputs.filename }}
           retention-days: 30

@@ -22,15 +22,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk \
-            autoconf libtool pkg-config zlib1g-dev \
-            libncurses5-dev libncursesw5-dev libtinfo5 \
-            cmake libffi-dev libssl-dev
+            git zip unzip curl \
+            openjdk-17-jdk \
+            autoconf automake libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            cmake libffi-dev libssl-dev \
+            libltdl-dev libgdbm-dev libbz2-dev \
+            python3-pip python3-dev \
+            ccache lld
 
-      - name: 安装 buildozer
+      - name: 安装 buildozer 和依赖
         run: |
-          pip install --upgrade pip
-          pip install buildozer cython
+          pip install --upgrade pip wheel setuptools
+          pip install "buildozer==1.5.0" "cython==0.29.37"
+          pip install "kivy==2.3.0"
 
       - name: 复制数据文件到 kivy_app
         run: |

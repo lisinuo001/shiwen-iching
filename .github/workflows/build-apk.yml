@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    container:
+      image: kivy/buildozer:latest
 
     steps:
       - name: Checkout 代码
@@ -18,17 +20,14 @@ jobs:
           cp iching_data.py kivy_app/
           cp yaoci_data.py  kivy_app/
 
-      - name: 构建 APK（使用官方 buildozer action）
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          command: buildozer android debug
-          workdir: kivy_app
-          buildozer_version: stable
+      - name: 构建 APK
+        working-directory: kivy_app
+        run: |
+          buildozer -v android debug
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
           name: ShiWen-v2.2.0-debug
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: kivy_app/bin/*.apk
           retention-days: 30

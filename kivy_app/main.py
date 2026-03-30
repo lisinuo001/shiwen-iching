@@ -4,6 +4,7 @@
 易经算卦 - Kivy Android 版
 """
 import random
+import os
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -16,8 +17,20 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, Ellipse, Line, Rectangle
 from kivy.clock import Clock
 from kivy.core.window import Window
+from kivy.core.text import LabelBase
 from kivy.utils import get_color_from_hex
 from kivy.metrics import dp, sp
+
+# ── 注册中文字体并设为全局默认 ──────────────────
+_font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "NotoSansCJK.otf")
+if os.path.exists(_font_path):
+    # 注册为 NotoSansCJK
+    LabelBase.register(name="NotoSansCJK", fn_regular=_font_path)
+    # 覆盖 Roboto（Kivy默认字体），使所有 Label/Button 自动使用中文字体
+    LabelBase.register(name="Roboto",      fn_regular=_font_path)
+    _CN_FONT = "NotoSansCJK"
+else:
+    _CN_FONT = "Roboto"
 
 # ── 赛博朋克颜色 ──────────────────────────────
 C_BG       = get_color_from_hex("#0a0a0f")

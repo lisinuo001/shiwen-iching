@@ -19,6 +19,7 @@ jobs:
         run: |
           cp iching_data.py kivy_app/
           cp yaoci_data.py  kivy_app/
+          cp iching_icon.png kivy_app/icon.png
 
       - name: 构建 APK
         working-directory: kivy_app

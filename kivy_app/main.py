@@ -292,32 +292,61 @@ class YaoSlot(Widget):
             draw_text(self.canvas, typ + "\u723B", 0, y+h/2-sp(5), sp(11), (*col[:3], 0.50), center_x=x+w*0.90)
 
 # ---- HoldButton with idle glow effect (#5) ----
-class HoldButton(Widget):
+class HoldButton(BoxLayout):
     HOLD = 1.5
     def __init__(self, on_complete=None, **kw):
-        super().__init__(**kw)
+        super().__init__(orientation='vertical', **kw)
         self._cb = on_complete
         self._hold = False; self._prog = 0; self._done = False; self._ev = None
         self._phase = 0
-        self._idle_ev = Clock.schedule_interval(self._idle_tick, 0.030)
         self.size_hint_y = None; self.height = dp(72)
-        self.bind(pos=self._draw, size=self._draw)
-        Clock.schedule_once(lambda dt: self._draw(), 0)
+        self.padding = [dp(8), dp(4)]
+        # text labels (native Label for proper rendering)
+        self._lbl_cn = Label(text="\u6309\u4f4f \u00b7 \u611f\u5e94\u5929\u673a", font_name=CN,
+            font_size=sp(20), color=WHITE, bold=True, halign='center', valign='middle',
+            size_hint_y=0.6, markup=True)
+        self._lbl_cn.bind(size=lambda w,s: setattr(w,'text_size',s))
+        self._lbl_en = Label(text="HOLD 1.5s", font_name=CN,
+            font_size=sp(11), color=(*PINK[:3], 0.45), halign='center', valign='middle',
+            size_hint_y=0.4, markup=True)
+        self._lbl_en.bind(size=lambda w,s: setattr(w,'text_size',s))
+        self.add_widget(self._lbl_cn)
+        self.add_widget(self._lbl_en)
+        self._idle_ev = Clock.schedule_interval(self._idle_tick, 0.030)
+        self.bind(pos=self._draw_bg, size=self._draw_bg)
+        Clock.schedule_once(lambda dt: self._draw_bg(), 0)
 
     def _idle_tick(self, dt):
         if not self._hold and not self._done:
             self._phase += dt
-            self._draw()
+            self._draw_bg()
 
-    def _draw(self, *_):
-        self.canvas.clear()
+    def _update_labels(self):
+        if self._done:
+            self._lbl_cn.text = "\u5929\u673a\u5df2\u6210"
+            self._lbl_cn.color = GREEN
+            self._lbl_en.text = "DIVINATION COMPLETE"
+            self._lbl_en.color = (*GREEN[:3], 0.45)
+        elif self._hold:
+            pct = int(self._prog * 100)
+            self._lbl_cn.text = f"\u611f\u5e94\u5929\u673a {pct}%"
+            self._lbl_cn.color = GREEN
+            self._lbl_en.text = "CHANNELING"
+            self._lbl_en.color = (*GREEN[:3], 0.45)
+        else:
+            self._lbl_cn.text = "\u6309\u4f4f \u00b7 \u611f\u5e94\u5929\u673a"
+            self._lbl_cn.color = WHITE
+            self._lbl_en.text = "HOLD 1.5s"
+            self._lbl_en.color = (*PINK[:3], 0.45)
+
+    def _draw_bg(self, *_):
+        self.canvas.before.clear()
         x, y, w, h = self.x, self.y, self.width, self.height
         p = self._prog
         if self._done: mc = GREEN[:3]
         elif self._hold: mc = GREEN[:3]
         else: mc = PINK[:3]
 
-        # idle breathing glow
         idle_glow = 0
         if not self._hold and not self._done:
             idle_glow = 0.5 + 0.5 * math.sin(self._phase * 2 * math.pi / 1.5)
@@ -325,77 +354,75 @@ class HoldButton(Widget):
         ba = 0.50 if self._hold else (0.25 + 0.15 * idle_glow)
         ga = 0.18 if self._hold else (0.08 + 0.12 * idle_glow)
 
-        draw_chamfer_box(self.canvas, x, y, w, h, mc,
+        draw_chamfer_box(self.canvas.before, x, y, w, h, mc,
                          border_a=ba, glow_a=ga)
         if p > 0:
             pw = max(dp(4), (w - dp(6)) * p)
-            with self.canvas:
+            with self.canvas.before:
                 Color(*GREEN[:3], 0.18)
                 Rectangle(pos=(x+dp(3), y+dp(3)), size=(pw, h-dp(6)))
 
-        # idle outer ring pulse
         if not self._hold and not self._done:
-            with self.canvas:
+            with self.canvas.before:
                 Color(*mc, 0.06 * idle_glow)
                 pts = _cpts(x-dp(3), y-dp(3), w+dp(6), h+dp(6), dp(12))
                 bpts = pts + [pts[0], pts[1]]
                 Line(points=bpts, width=dp(2), close=False)
 
-        mid_y = y + h/2
-        if self._done:
-            draw_text(self.canvas, "\u5929\u673a\u5df2\u6210", 0, mid_y+sp(2), sp(22), GREEN, center_x=x+w/2)
-            draw_text(self.canvas, "DIVINATION COMPLETE", 0, mid_y-sp(16), sp(11), (*GREEN[:3], 0.45), center_x=x+w/2)
-        elif self._hold:
-            pct = int(p * 100)
-            draw_text(self.canvas, f"\u611f\u5e94\u5929\u673a {pct}%", 0, mid_y+sp(2), sp(22), GREEN, center_x=x+w/2)
-            draw_text(self.canvas, "CHANNELING", 0, mid_y-sp(16), sp(11), (*GREEN[:3], 0.45), center_x=x+w/2)
-        else:
-            draw_text(self.canvas, "\u6309\u4f4f \u00b7 \u611f\u5e94\u5929\u673a", 0, mid_y+sp(2), sp(20), WHITE, center_x=x+w/2)
-            draw_text(self.canvas, "HOLD 1.5s", 0, mid_y-sp(16), sp(11), (*PINK[:3], 0.45), center_x=x+w/2)
-
     def on_touch_down(self, t):
         if self._done or not self.collide_point(*t.pos): return False
         self._hold = True; self._prog = 0
         if self._ev: self._ev.cancel()
-        self._ev = Clock.schedule_interval(self._tick, 0.025); self._draw(); return True
+        self._ev = Clock.schedule_interval(self._tick, 0.025)
+        self._update_labels(); self._draw_bg(); return True
     def on_touch_up(self, t):
         if not self._hold: return False
         self._hold = False
         if self._ev: self._ev.cancel()
-        if self._prog < 1.0: self._prog = 0; self._draw()
+        if self._prog < 1.0: self._prog = 0
+        self._update_labels(); self._draw_bg()
         return True
     def _tick(self, dt):
         self._prog += dt / self.HOLD
         if self._prog >= 1.0:
             self._prog = 1.0; self._done = True; self._ev.cancel(); self._hold = False
-            self._draw()
+            self._update_labels(); self._draw_bg()
             if self._cb: self._cb()
-        else: self._draw()
+        else:
+            self._update_labels(); self._draw_bg()
     def reset(self):
         if self._ev: self._ev.cancel()
-        self._prog = 0; self._hold = False; self._done = False; self._draw()
+        self._prog = 0; self._hold = False; self._done = False
+        self._update_labels(); self._draw_bg()
 
 # ---- TapButton: Chinese big English small (#6) ----
-class TapButton(Widget):
+class TapButton(BoxLayout):
     def __init__(self, text_cn, text_en="", col=None, on_press=None, **kw):
-        super().__init__(**kw)
-        self._cn = text_cn; self._en = text_en
+        h = kw.pop('height', dp(44))
+        super().__init__(orientation='vertical', **kw)
         self._col = col or CYAN; self._on_press = on_press; self._pressed = False
-        self.size_hint_y = None; self.height = kw.get('height', dp(44))
+        self.size_hint_y = None; self.height = h
+        self.padding = [dp(6), dp(2)]
+        # native labels
+        self._lbl_cn = Label(text=text_cn, font_name=CN, font_size=sp(16),
+            color=(*self._col[:3], 0.90), bold=True, halign='center', valign='middle',
+            size_hint_y=0.6 if text_en else 1.0)
+        self._lbl_cn.bind(size=lambda w,s: setattr(w,'text_size',s))
+        self.add_widget(self._lbl_cn)
+        if text_en:
+            self._lbl_en = Label(text=text_en, font_name=CN, font_size=sp(11),
+                color=(*self._col[:3], 0.40), halign='center', valign='middle',
+                size_hint_y=0.4)
+            self._lbl_en.bind(size=lambda w,s: setattr(w,'text_size',s))
+            self.add_widget(self._lbl_en)
         self.bind(pos=self._redraw, size=self._redraw)
         Clock.schedule_once(lambda dt: self._redraw(), 0)
     def _redraw(self, *_):
-        self.canvas.clear()
+        self.canvas.before.clear()
         x, y, w, h = self.x, self.y, self.width, self.height
-        draw_chamfer_box(self.canvas, x, y, w, h, self._col[:3],
+        draw_chamfer_box(self.canvas.before, x, y, w, h, self._col[:3],
                          cut=dp(10), border_a=0.35 if self._pressed else 0.22,
                          glow_a=0.10 if self._pressed else 0.05, scanlines=False, band=False)
-        mid_y = y + h / 2
-        if self._en:
-            draw_text(self.canvas, self._cn, 0, mid_y+sp(1), sp(16), (*self._col[:3], 0.90), center_x=x+w/2)
-            draw_text(self.canvas, self._en, 0, mid_y-sp(14), sp(11), (*self._col[:3], 0.40), center_x=x+w/2)
-        else:
-            draw_text(self.canvas, self._cn, 0, mid_y-sp(8), sp(16), (*self._col[:3], 0.85), center_x=x+w/2)
     def on_touch_down(self, t):
         if not self.collide_point(*t.pos): return False
         self._pressed = True; self._redraw(); return True

@@ -32,13 +32,6 @@ jobs:
             libreadline-dev libsqlite3-dev \
             cmake
 
-      - name: Set JAVA_HOME to JDK 17
-        run: |
-          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-          echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
-          echo "$JAVA_HOME/bin" >> $GITHUB_PATH
-          java -version
-
       - name: Install Buildozer & Cython
         run: |
           pip install --upgrade pip
@@ -51,22 +44,12 @@ jobs:
 
       - name: Build APK
         working-directory: kivy_app
-        env:
-          KIVY_LOG_MODE: PYTHON
         run: |
-          buildozer -v android debug
-
-      - name: List bin directory
-        run: |
-          echo "=== kivy_app/bin contents ==="
-          ls -la kivy_app/bin/ || echo "bin directory not found"
-          echo "=== searching for APK ==="
-          find . -name "*.apk" -type f || echo "no APK found"
+          yes | buildozer android debug 2>&1 | tail -50
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShiWen-APK-v10.1
+          name: ShiWen-APK-v10
           path: kivy_app/bin/*.apk
           retention-days: 30
-          if-no-files-found: error

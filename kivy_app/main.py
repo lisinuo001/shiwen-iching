@@ -237,59 +237,88 @@ def draw_led_digit(canvas, digit, cx, cy, dw, dh, col, lw=None):
                 Color(r, g, b, 0.06)
                 Line(points=[seg_pts[i][0], seg_pts[i][1], seg_pts[i][2], seg_pts[i][3]], width=lw*0.6, cap='square')
 
-# ---- YaoSlot: one row showing LED 0/1 + small yao line ----
-class YaoSlot(Widget):
-    """A single yao display row: LED digit + small yao symbol."""
+# ---- YaoSlot: one row showing 0/1 + yao line (native Labels) ----
+class YaoSlot(BoxLayout):
+    """A single yao display row using native Labels for mobile compat."""
     def __init__(self, idx, **kw):
-        super().__init__(**kw)
+        super().__init__(orientation='horizontal', **kw)
         self.idx = idx
         self.state = 'empty'
         self._val = None
-        self.bind(pos=self._draw, size=self._draw)
+        self.spacing = dp(4)
+        self.padding = [dp(6), 0]
+        # name label
+        self._lbl_name = Label(text=YN[idx], font_name=CN, font_size=sp(12),
+            color=(*DIM[:3], 0.30), halign='center', valign='middle',
+            size_hint_x=None, width=dp(36))
+        self._lbl_name.bind(size=lambda w, s: setattr(w, 'text_size', s))
+        self.add_widget(self._lbl_name)
+        # digit label (LED style via monospace look)
+        self._lbl_digit = Label(text="-", font_name=CN, font_size=sp(26),
+            color=(*DIM[:3], 0.15), bold=True, halign='center', valign='middle',
+            size_hint_x=None, width=dp(40))
+        self._lbl_digit.bind(size=lambda w, s: setattr(w, 'text_size', s))
+        self.add_widget(self._lbl_digit)
+        # yao line widget (canvas drawn, relative coords are fine for small widget)
+        self._yao_w = Widget(size_hint_x=1)
+        self._yao_w.bind(pos=self._draw_yao, size=self._draw_yao)
+        self.add_widget(self._yao_w)
+        # type label
+        self._lbl_type = Label(text="", font_name=CN, font_size=sp(11),
+            color=(*DIM[:3], 0.30), halign='center', valign='middle',
+            size_hint_x=None, width=dp(36))
+        self._lbl_type.bind(size=lambda w, s: setattr(w, 'text_size', s))
+        self.add_widget(self._lbl_type)
+        self.bind(pos=self._draw_bg, size=self._draw_bg)
 
     def reveal(self, is_yang):
         self._val = is_yang
         self.state = 'revealed'
-        self._draw()
+        col = GOLD if is_yang else CYAN
+        self._lbl_name.color = (*col[:3], 0.70)
+        self._lbl_digit.text = "1" if is_yang else "0"
+        self._lbl_digit.color = col
+        self._lbl_digit.font_size = sp(28)
+        typ = "\u9633" if is_yang else "\u9634"
+        self._lbl_type.text = typ + "\u723B"
+        self._lbl_type.color = (*col[:3], 0.55)
+        self._draw_bg()
+        self._draw_yao()
 
     def reset(self):
-        self.state = 'empty'; self._val = None; self._draw()
+        self.state = 'empty'
+        self._val = None
+        self._lbl_name.color = (*DIM[:3], 0.30)
+        self._lbl_digit.text = "-"
+        self._lbl_digit.color = (*DIM[:3], 0.15)
+        self._lbl_digit.font_size = sp(26)
+        self._lbl_type.text = ""
+        self._draw_bg()
+        self._draw_yao()
 
-    def _draw(self, *_):
-        self.canvas.clear()
+    def _draw_bg(self, *_):
+        self.canvas.before.clear()
         x, y, w, h = self.x, self.y, self.width, self.height
-        if w < 4 or h < 4: return
-
-        if self.state == 'empty':
-            # dim placeholder line
-            with self.canvas:
-                Color(*DIM[:3], 0.10)
-                Rectangle(pos=(x, y+h/2-dp(0.5)), size=(w, dp(1)))
-            draw_text(self.canvas, YN[self.idx], x+dp(4), y+h/2-sp(6), sp(12), (*DIM[:3], 0.30))
-            # ghost LED digit "8" shape
-            draw_led_digit(self.canvas, '8', x+w*0.38, y+h/2,
-                           min(h*0.45, dp(18)), min(h*0.70, dp(30)),
-                           (*DIM[:3], 0.06), dp(1.5))
-        else:
-            col = GOLD if self._val else CYAN
-            num = "1" if self._val else "0"
-            typ = "\u9633" if self._val else "\u9634"
-            bg_c = [0.14, 0.12, 0.04] if self._val else [0.04, 0.10, 0.14]
-            with self.canvas:
+        if w < 4 or h < 4:
+            return
+        with self.canvas.before:
+            if self.state == 'empty':
+                Color(*DIM[:3], 0.08)
+                Rectangle(pos=(x, y + h/2 - dp(0.5)), size=(w, dp(1)))
+            else:
+                bg_c = [0.14, 0.12, 0.04] if self._val else [0.04, 0.10, 0.14]
                 Color(*bg_c, 0.5)
-                Rectangle(pos=(x, y+dp(1)), size=(w, h-dp(2)))
-            # yao name
-            draw_text(self.canvas, YN[self.idx], x+dp(4), y+h/2-sp(6), sp(12), (*col[:3], 0.65))
-            # LED digit
-            led_w = min(h*0.45, dp(18))
-            led_h = min(h*0.70, dp(30))
-            draw_led_digit(self.canvas, num, x+w*0.38, y+h/2, led_w, led_h, col[:3], dp(2.5))
-            # small yao line
-            lx = x + w * 0.54
-            lw2 = w * 0.26
-            draw_yao_line(self.canvas, lx, y+h/2, lw2, self._val, col[:3], dp(2.5))
-            # type label
-            draw_text(self.canvas, typ + "\u723B", 0, y+h/2-sp(5), sp(11), (*col[:3], 0.50), center_x=x+w*0.90)
+                Rectangle(pos=(x, y + dp(1)), size=(w, h - dp(2)))
+
+    def _draw_yao(self, *_):
+        self._yao_w.canvas.clear()
+        if self.state != 'revealed' or self._val is None:
+            return
+        x, y, w, h = self._yao_w.x, self._yao_w.y, self._yao_w.width, self._yao_w.height
+        if w < 4 or h < 4:
+            return
+        col = GOLD[:3] if self._val else CYAN[:3]
+        draw_yao_line(self._yao_w.canvas, x + dp(4), y + h/2, w - dp(8), self._val, col, dp(2.5))
 
 # ---- HoldButton with idle glow effect (#5) ----
 class HoldButton(BoxLayout):

@@ -1,767 +1,691 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
-天机 · TIANJI - Kivy Android v2.5.0
-按住1.5秒起卦 · 六爻赛博灯管 · 烟雾特效
+TIANJI v10.0 - Cyberpunk HUD Divination Console
+Design Spec: DESIGN_SPEC.md v1.0 (frozen 2026-04-10)
 """
-import random, os, sys, math
+import random, os, sys, math, time
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.uix.button import Button
 from kivy.uix.widget import Widget
-from kivy.graphics import (Color, Ellipse, Line, Rectangle,
-                            RoundedRectangle, Triangle)
+from kivy.graphics import Color, Rectangle, Line, Ellipse, Triangle
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
-from kivy.utils import get_color_from_hex
+from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp, sp
 from kivy.resources import resource_add_path, resource_find
+# ==== DESIGN CONSTRAINTS (from DESIGN_SPEC.md) ====
+# DO NOT use RoundedRectangle for any panel/card/button
+# ALL containers must use 45-degree chamfered polygon
+# Chamfer: large=dp(10), small=dp(8), button=dp(10)
+# Border: glow(dp4,a0.20) + main(dp1.2) + corner_ticks(dp7,dp1.1)
+# Scanlines: dp(4) spacing, white a0.010
+# Top accent band: dp(2) height
+# NO external image resources
 
-# ══════════════════════════════════════════════
-#  字体注册
-# ══════════════════════════════════════════════
+# ---- Font ----
 def _find_font():
     for p in [
-        os.path.join(os.environ.get("ANDROID_APP_PATH",""), "NotoSansCJK.otf"),
-        os.path.join(os.getcwd(), "NotoSansCJK.otf"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "NotoSansCJK.otf"),
+        os.path.join(os.getcwd(), "NotoSansCJK.otf"),
     ]:
-        if p and os.path.exists(p): return p
+        if os.path.exists(p):
+            return p
     return resource_find("NotoSansCJK.otf")
 
 _fp = _find_font()
 if _fp:
-    for n in ("NotoSansCJK","Roboto","RobotoMono"):
+    for n in ("NotoSansCJK", "Roboto"):
         LabelBase.register(name=n, fn_regular=_fp)
     CN = "NotoSansCJK"
 else:
     CN = "Roboto"
 
-# ══════════════════════════════════════════════
-#  颜色
-# ══════════════════════════════════════════════
-BG    = get_color_from_hex("#060810")
-INSET = get_color_from_hex("#0c1428")
-CYAN  = get_color_from_hex("#00f5ff")
-PINK  = get_color_from_hex("#ff2d9b")
-GREEN = get_color_from_hex("#39ff14")
-PURP  = get_color_from_hex("#b44fff")
-YELL  = get_color_from_hex("#ffe600")
-DIM   = get_color_from_hex("#1e2d45")
-DDIM  = get_color_from_hex("#0e1828")
-TEXT  = get_color_from_hex("#c8d8e8")
-WHITE = get_color_from_hex("#ffffff")
+# ---- Palette (DESIGN_SPEC Section 3) ----
+BG      = [0.06, 0.07, 0.11, 1]
+CARD    = [0.11, 0.12, 0.18, 1]
+CARD_HI = [0.15, 0.16, 0.24, 1]
+CYAN    = [0.00, 0.87, 0.95, 1]
+GOLD    = [1.00, 0.84, 0.20, 1]
+PINK    = [0.96, 0.26, 0.58, 1]
+GREEN   = [0.30, 0.92, 0.40, 1]
+PURP    = [0.62, 0.40, 0.98, 1]
+DIM     = [0.40, 0.44, 0.54, 1]
+WHITE   = [0.94, 0.95, 0.97, 1]
+SOFT    = [0.68, 0.72, 0.80, 1]
 
 Window.clearcolor = BG
 
-# ══════════════════════════════════════════════
-#  数据
-# ══════════════════════════════════════════════
+# ---- Data ----
 TRIGRAMS = {
-    (1,1,1):("乾","☰","天"),(0,0,0):("坤","☷","地"),
-    (1,0,0):("震","☳","雷"),(0,0,1):("艮","☶","山"),
-    (0,1,1):("巽","☴","风"),(1,1,0):("兑","☱","泽"),
-    (1,0,1):("坎","☵","水"),(0,1,0):("离","☲","火"),
+    (1,1,1): ("\u4e7e","\u2630","\u5929"), (0,0,0): ("\u5764","\u2637","\u5730"),
+    (1,0,0): ("\u9707","\u2633","\u96f7"), (0,0,1): ("\u826e","\u2636","\u5c71"),
+    (0,1,1): ("\u5dfd","\u2634","\u98ce"), (1,1,0): ("\u5151","\u2631","\u6cfd"),
+    (1,0,1): ("\u574e","\u2635","\u6c34"), (0,1,0): ("\u79bb","\u2632","\u706b"),
 }
-TSYM = {k:v[1] for k,v in TRIGRAMS.items()}
 
 def _load():
-    for d in [os.getcwd(), os.path.dirname(os.path.abspath(__file__)),
-              os.environ.get("ANDROID_APP_PATH","")]:
-        if d and d not in sys.path: sys.path.insert(0,d)
+    d = os.path.dirname(os.path.abspath(__file__))
+    for p in [d, os.path.dirname(d), os.getcwd()]:
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
     try:
         from iching_data import HEXAGRAMS
         from yaoci_data import get_yaoci
         return HEXAGRAMS, get_yaoci
-    except Exception as e:
-        return {}, lambda k,i: ("爻辞待查", f"数据加载失败:{e}")
+    except Exception:
+        return {}, lambda k, i: ("\u723B\u8f9e\u5f85\u67e5", "\u6570\u636e\u52a0\u8f7d\u5931\u8d25")
+
 HEXAGRAMS, get_yaoci = _load()
+YN = ["\u521d\u723B","\u4e8c\u723B","\u4e09\u723B","\u56db\u723B","\u4e94\u723B","\u4e0a\u723B"]
 
+# ---- Chamfered polygon (DESIGN_SPEC Section 2) ----
+def _cpts(x, y, w, h, c):
+    return [x+c,y+h, x+w,y+h, x+w,y+c, x+w-c,y, x,y, x,y+h-c]
 
-# ══════════════════════════════════════════════
-#  工具：绘制霓虹光晕线条
-# ══════════════════════════════════════════════
-def neon_line(canvas, pts, col_rgb, bright=1.0):
-    """在 canvas 上绘制带光晕的霓虹线条"""
-    r,g,b = col_rgb
-    # 外发光层
+def draw_chamfer_box(canvas, x, y, w, h, col_rgb, cut=None,
+                     border_a=0.30, glow_a=0.20, scanlines=True, band=True,
+                     fill_col=None):
+    """Draw a chamfered panel per DESIGN_SPEC Section 2."""
+    c = cut or dp(10)
+    r, g, b = col_rgb[:3]
+    pts = _cpts(x, y, w, h, c)
+    cx, cy = x + w/2, y + h/2
+    fc = fill_col or CARD[:3]
     with canvas:
-        Color(r,g,b,0.08*bright); Line(points=pts, width=dp(9))
-        Color(r,g,b,0.18*bright); Line(points=pts, width=dp(5))
-        Color(r,g,b,0.45*bright); Line(points=pts, width=dp(2.5))
-        Color(r,g,b,1.0*bright);  Line(points=pts, width=dp(1.0))
+        # fill
+        Color(*fc, 1)
+        for i in range(0, len(pts), 2):
+            ni = (i+2) % len(pts)
+            Triangle(points=[cx, cy, pts[i], pts[i+1], pts[ni], pts[ni+1]])
+        # scanlines (Spec 2.4)
+        if scanlines and h > dp(20):
+            Color(1, 1, 1, 0.010)
+            sy = y + dp(4)
+            while sy < y + h - dp(4):
+                Rectangle(pos=(x+dp(4), sy), size=(w-dp(8), dp(1)))
+                sy += dp(4)
+        # top accent band (Spec 2.3)
+        if band:
+            Color(r, g, b, border_a * 0.8)
+            Rectangle(pos=(x, y+h-dp(2)), size=(w, dp(2)))
+        # glow border (Spec 2.2 layer 1)
+        bpts = pts + [pts[0], pts[1]]
+        Color(r, g, b, glow_a)
+        Line(points=bpts, width=dp(4), close=False)
+        # main border (Spec 2.2 layer 2)
+        Color(r, g, b, border_a)
+        Line(points=bpts, width=dp(1.2), close=False)
+        # corner ticks (Spec 2.2 layer 3)
+        cs = dp(7)
+        Color(r, g, b, min(border_a * 1.6, 0.85))
+        Line(points=[x, y+cs, x, y, x+cs, y], width=dp(1.1))
+        Line(points=[x+w-cs, y, x+w, y, x+w, y+cs], width=dp(1.1))
+        Line(points=[x, y+h-cs, x, y+h, x+cs, y+h], width=dp(1.1))
+        Line(points=[x+w-cs, y+h, x+w, y+h, x+w, y+h-cs], width=dp(1.1))
 
-def neon_circle(canvas, cx,cy,r, col_rgb, bright=1.0):
-    rr,g,b = col_rgb
+# ---- Canvas text helper ----
+def draw_text(canvas, text, x, y, font_size, color, center_x=None):
+    cl = CoreLabel(text=text, font_name=CN, font_size=font_size, color=(1,1,1,1))
+    cl.refresh()
+    tex = cl.texture
+    if not tex: return 0, 0
+    tw, th = tex.size
+    if center_x is not None:
+        x = center_x - tw/2
+    r, g, b = color[:3]
+    a = color[3] if len(color) > 3 else 1.0
     with canvas:
-        Color(rr,g,b,0.08*bright); Line(circle=(cx,cy,r+dp(4)), width=dp(8))
-        Color(rr,g,b,0.18*bright); Line(circle=(cx,cy,r+dp(2)), width=dp(4))
-        Color(rr,g,b,0.45*bright); Line(circle=(cx,cy,r),       width=dp(2))
-        Color(rr,g,b,1.0*bright);  Line(circle=(cx,cy,r),       width=dp(1))
+        Color(r, g, b, a)
+        Rectangle(pos=(x, y), size=(tw, th), texture=tex)
+    return tw, th
 
-
-# ══════════════════════════════════════════════
-#  赛博霓虹按钮
-# ══════════════════════════════════════════════
-def neon_btn(text, col, fs=None, **kw):
-    """带霓虹边框的赛博按钮"""
-    fs = fs or sp(15)
-    r,g,b,a = col
-    b_widget = Button(
-        text=text, font_name=CN, font_size=fs, bold=True,
-        background_normal="", background_color=(r*0.15,g*0.15,b*0.15,1),
-        color=col, **kw)
-    # 添加霓虹边框
-    def _redraw_border(inst, *args):
-        inst.canvas.after.clear()
-        x,y,w,h = inst.x,inst.y,inst.width,inst.height
-        with inst.canvas.after:
-            Color(r,g,b,0.15); Line(rounded_rectangle=(x,y,w,h,dp(6)), width=dp(5))
-            Color(r,g,b,0.40); Line(rounded_rectangle=(x,y,w,h,dp(6)), width=dp(2.5))
-            Color(r,g,b,0.90); Line(rounded_rectangle=(x,y,w,h,dp(6)), width=dp(1))
-    b_widget.bind(pos=_redraw_border, size=_redraw_border)
-    # 按压效果
-    def _dn(inst,*a):
-        inst.background_color=(r*0.3,g*0.3,b*0.3,1)
-    def _up(inst,*a):
-        inst.background_color=(r*0.15,g*0.15,b*0.15,1)
-    b_widget.bind(on_press=_dn, on_release=_up)
-    return b_widget
-
-
-# ══════════════════════════════════════════════
-#  烟雾粒子系统
-# ══════════════════════════════════════════════
-class SmokeParticle:
+# ---- Smoke particles ----
+class _P:
+    __slots__ = ('x','y','r','vx','vy','a','da','col')
     def __init__(self, cx, cy, col):
-        self.x = cx + random.uniform(-dp(12), dp(12))
-        self.y = cy + random.uniform(-dp(8),  dp(8))
-        self.r = random.uniform(dp(1.5), dp(4))
-        self.vx = random.uniform(-dp(0.4), dp(0.4))
-        self.vy = random.uniform(dp(0.3), dp(1.2))
-        self.alpha = random.uniform(0.5, 0.9)
-        self.decay = random.uniform(0.025, 0.05)
+        self.x = cx + random.uniform(-dp(14), dp(14))
+        self.y = cy + random.uniform(-dp(8), dp(8))
+        self.r = random.uniform(dp(2), dp(5))
+        self.vx = random.uniform(-dp(0.5), dp(0.5))
+        self.vy = random.uniform(dp(0.6), dp(1.5))
+        self.a = random.uniform(0.55, 0.90)
+        self.da = random.uniform(0.018, 0.035)
         self.col = col
-    @property
-    def alive(self): return self.alpha > 0.02
 
-class SmokeOverlay(Widget):
-    """悬浮在卡片上方的烟雾层"""
-    def __init__(self,**kw):
+class SmokeLayer(Widget):
+    def __init__(self, **kw):
         super().__init__(**kw)
-        self._particles = []
-        self._ev = None
-        self.size_hint = (1,1)
-        self.bind(pos=self._redraw, size=self._redraw)
-
-    def burst(self, wx, wy, col):
-        """在世界坐标 wx,wy 喷射烟雾"""
-        for _ in range(12):
-            self._particles.append(SmokeParticle(wx, wy, col))
-        if self._ev is None:
-            self._ev = Clock.schedule_interval(self._step, 0.033)
-
-    def _step(self, dt):
-        for p in self._particles:
-            p.x += p.vx; p.y += p.vy
-            p.r  += dp(0.15)
-            p.alpha -= p.decay
-        self._particles = [p for p in self._particles if p.alive]
-        if not self._particles:
-            if self._ev: self._ev.cancel(); self._ev = None
-        self._redraw()
-
-    def _redraw(self, *a):
+        self._ps = []; self._ev = None
+        self.size_hint = (None, None); self.size = (1, 1)
+    def burst(self, cx, cy, col):
+        for _ in range(16):
+            self._ps.append(_P(cx, cy, col))
+        if not self._ev:
+            self._ev = Clock.schedule_interval(self._tick, 0.025)
+    def _tick(self, dt):
+        for p in self._ps:
+            p.x += p.vx; p.y += p.vy; p.r += dp(0.18); p.a -= p.da
+        self._ps = [p for p in self._ps if p.a > 0.02]
+        if not self._ps and self._ev:
+            self._ev.cancel(); self._ev = None
+        self._draw()
+    def _draw(self):
         self.canvas.clear()
         with self.canvas:
-            for p in self._particles:
-                r,g,b = p.col
-                Color(r,g,b, p.alpha * 0.6)
-                Ellipse(pos=(p.x - p.r, p.y - p.r), size=(p.r*2, p.r*2))
+            for p in self._ps:
+                Color(*p.col, p.a * 0.5)
+                Ellipse(pos=(p.x-p.r, p.y-p.r), size=(p.r*2, p.r*2))
 
+# ---- Draw yao line helper ----
+def draw_yao_line(canvas, x, cy, w, is_yang, col, lw=None):
+    lw = lw or dp(3)
+    r, g, b = col[:3]
+    gap = w * 0.18
+    with canvas:
+        Color(r, g, b, 0.15)
+        if is_yang:
+            Line(points=[x, cy, x+w, cy], width=lw*2)
+        else:
+            Line(points=[x, cy, x+w/2-gap/2, cy], width=lw*2)
+            Line(points=[x+w/2+gap/2, cy, x+w, cy], width=lw*2)
+        Color(r, g, b, 0.92)
+        if is_yang:
+            Line(points=[x, cy, x+w, cy], width=lw)
+        else:
+            Line(points=[x, cy, x+w/2-gap/2, cy], width=lw)
+            Line(points=[x+w/2+gap/2, cy, x+w, cy], width=lw)
 
-# ══════════════════════════════════════════════
-#  六爻赛博灯管卡片
-# ══════════════════════════════════════════════
-class NeonBitCard(FloatLayout):
-    """显示单爻的霓虹灯管卡片  state: idle/pending/yang/yin"""
+# ---- 7-segment LED digit helper ----
+# Segments: a(top), b(top-right), c(bot-right), d(bot), e(bot-left), f(top-left), g(mid)
+_SEG_MAP = {
+    '0': (1,1,1,1,1,1,0),
+    '1': (0,1,1,0,0,0,0),
+}
 
-    YAO_NAMES = ["初","二","三","四","五","上"]
+def draw_led_digit(canvas, digit, cx, cy, dw, dh, col, lw=None):
+    """Draw a 7-segment style digit centered at (cx, cy)."""
+    lw = lw or dp(2.5)
+    segs = _SEG_MAP.get(digit, (0,0,0,0,0,0,0))
+    r, g, b = col[:3]
+    hw, hh = dw/2, dh/2
+    gap = dp(1.5)  # gap between segments
+    x0, x1 = cx - hw, cx + hw
+    y0, y1, ym = cy - hh, cy + hh, cy
+    # segment definitions: (x_start, y_start, x_end, y_end)
+    seg_pts = [
+        (x0+gap, y1, x1-gap, y1),           # a - top horizontal
+        (x1, y1-gap, x1, ym+gap),            # b - top right vertical
+        (x1, ym-gap, x1, y0+gap),            # c - bot right vertical
+        (x0+gap, y0, x1-gap, y0),            # d - bot horizontal
+        (x0, ym-gap, x0, y0+gap),            # e - bot left vertical
+        (x0, y1-gap, x0, ym+gap),            # f - top left vertical
+        (x0+gap, ym, x1-gap, ym),            # g - mid horizontal
+    ]
+    with canvas:
+        for i, on in enumerate(segs):
+            if on:
+                Color(r, g, b, 0.92)
+                Line(points=[seg_pts[i][0], seg_pts[i][1], seg_pts[i][2], seg_pts[i][3]], width=lw, cap='square')
+                # glow
+                Color(r, g, b, 0.15)
+                Line(points=[seg_pts[i][0], seg_pts[i][1], seg_pts[i][2], seg_pts[i][3]], width=lw*2.5, cap='square')
+            else:
+                Color(r, g, b, 0.06)
+                Line(points=[seg_pts[i][0], seg_pts[i][1], seg_pts[i][2], seg_pts[i][3]], width=lw*0.6, cap='square')
 
-    def __init__(self, idx, smoke_layer=None, **kw):
+# ---- YaoSlot: one row showing LED 0/1 + small yao line ----
+class YaoSlot(Widget):
+    """A single yao display row: LED digit + small yao symbol."""
+    def __init__(self, idx, **kw):
         super().__init__(**kw)
         self.idx = idx
-        self.state = 'idle'
-        self._glow = 0.3
-        self._gdir = 1
-        self._pulse_ev = None
-        self._smoke = smoke_layer
-        self.size_hint = (None, None)
-        self.size = (dp(52), dp(72))
+        self.state = 'empty'
+        self._val = None
+        self.bind(pos=self._draw, size=self._draw)
 
-        # 爻名 label（顶部）
-        self._name_lbl = Label(
-            text=self.YAO_NAMES[idx],
-            font_name=CN, font_size=sp(9), bold=False,
-            color=DIM,
-            size_hint=(1, None), height=dp(16),
-            pos_hint={'x':0, 'top':1},
-            halign='center', valign='middle')
-        self._name_lbl.bind(size=lambda w,s: setattr(w,'text_size',s))
-        self.add_widget(self._name_lbl)
-
-        # 主数字 label（中央）
-        self._main_lbl = Label(
-            text="", font_name=CN, font_size=sp(30), bold=True,
-            color=DIM,
-            size_hint=(1, None), height=dp(40),
-            pos_hint={'x':0, 'center_y':0.52},
-            halign='center', valign='middle')
-        self._main_lbl.bind(size=lambda w,s: setattr(w,'text_size',s))
-        self.add_widget(self._main_lbl)
-
-        # 类型 label（底部）
-        self._type_lbl = Label(
-            text="", font_name=CN, font_size=sp(9),
-            color=DIM,
-            size_hint=(1, None), height=dp(14),
-            pos_hint={'x':0, 'y':0},
-            halign='center', valign='middle')
-        self._type_lbl.bind(size=lambda w,s: setattr(w,'text_size',s))
-        self.add_widget(self._type_lbl)
-
-        self.bind(pos=self._draw_bg, size=self._draw_bg)
-        self._draw_bg()
-
-    # ── 背景框绘制 ────────────────────────────
-    def _draw_bg(self, *a):
-        self.canvas.before.clear()
-        x,y,w,h = self.x, self.y, self.width, self.height
-        g = self._glow
-        with self.canvas.before:
-            if self.state == 'idle':
-                Color(0.04,0.06,0.12,1)
-                RoundedRectangle(pos=(x,y),size=(w,h),radius=[dp(8)])
-                Color(*DIM)
-                Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)), width=dp(1))
-            elif self.state == 'pending':
-                # 脉冲发光边框
-                Color(0.0, g*0.08, g*0.18, 1)
-                RoundedRectangle(pos=(x,y),size=(w,h),radius=[dp(8)])
-                r2,g2,b2 = 0,g,1
-                Color(r2,g2,b2, 0.1*g)
-                RoundedRectangle(pos=(x-dp(3),y-dp(3)),size=(w+dp(6),h+dp(6)),radius=[dp(10)])
-                Color(r2,g2,b2,0.2*g);  Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(4))
-                Color(r2,g2,b2,0.6*g);  Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(2))
-                Color(r2,g2,b2,1.0);    Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(1))
-            elif self.state == 'yang':
-                # 金色深底
-                Color(0.10,0.07,0.0,1)
-                RoundedRectangle(pos=(x,y),size=(w,h),radius=[dp(8)])
-                # 金色外发光
-                ry,gy,by = YELL[:3]
-                Color(ry,gy,by,0.12); RoundedRectangle(pos=(x-dp(3),y-dp(3)),size=(w+dp(6),h+dp(6)),radius=[dp(10)])
-                Color(ry,gy,by,0.25); Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(5))
-                Color(ry,gy,by,0.55); Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(2.5))
-                Color(ry,gy,by,1.0);  Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(1))
-            elif self.state == 'yin':
-                # 青色深底
-                Color(0.0,0.07,0.12,1)
-                RoundedRectangle(pos=(x,y),size=(w,h),radius=[dp(8)])
-                rc,gc,bc = CYAN[:3]
-                Color(rc,gc,bc,0.12); RoundedRectangle(pos=(x-dp(3),y-dp(3)),size=(w+dp(6),h+dp(6)),radius=[dp(10)])
-                Color(rc,gc,bc,0.25); Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(5))
-                Color(rc,gc,bc,0.55); Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(2.5))
-                Color(rc,gc,bc,1.0);  Line(rounded_rectangle=(x+1,y+1,w-2,h-2,dp(7)),width=dp(1))
-
-        # 绘制中央霓虹数字（canvas.after 以免被背景遮住）
-        self.canvas.after.clear()
-        self._draw_digit()
-
-    def _draw_digit(self):
-        x,y,w,h = self.x, self.y, self.width, self.height
-        cx = x + w/2
-        # 数字绘制区域：卡片中央
-        mid_y = y + h*0.50
-        with self.canvas.after:
-            if self.state == 'yang':
-                # 霓虹 "1" —— 竖线 + 顶部小斜线
-                col = YELL[:3]
-                top = mid_y + dp(16)
-                bot = mid_y - dp(16)
-                neon_line(self.canvas.after, [cx, bot, cx, top], col)
-                neon_line(self.canvas.after, [cx-dp(5), top-dp(5), cx, top], col, 0.7)
-            elif self.state == 'yin':
-                # 霓虹 "0" —— 圆圈
-                col = CYAN[:3]
-                neon_circle(self.canvas.after, cx, mid_y, dp(14), col)
-            elif self.state == 'pending':
-                # 扫描线动画 "~"
-                g = self._glow
-                col = (0, g*0.8, 1.0)
-                neon_line(self.canvas.after,
-                          [cx-dp(12), mid_y, cx+dp(12), mid_y], col, g)
-
-    # ── 状态切换 ────────────────────────────
-    def set_pending(self):
-        self.state = 'pending'
-        self._glow = 0.3; self._gdir = 1
-        if self._pulse_ev: self._pulse_ev.cancel()
-        self._pulse_ev = Clock.schedule_interval(self._pulse, 0.04)
-        self._update_labels()
-        self._draw_bg()
-
-    def _pulse(self, dt):
-        self._glow += self._gdir * 0.07
-        if self._glow >= 1.0: self._glow=1.0; self._gdir=-1
-        elif self._glow <= 0.15: self._glow=0.15; self._gdir=1
-        self._draw_bg()
-
-    def reveal(self, is_yang: bool):
-        if self._pulse_ev: self._pulse_ev.cancel()
-        self.state = 'yang' if is_yang else 'yin'
-        self._update_labels()
-        self._draw_bg()
-        # 烟雾爆发
-        if self._smoke:
-            cx = self.x + self.width/2
-            cy = self.y + self.height/2
-            col = YELL[:3] if is_yang else CYAN[:3]
-            self._smoke.burst(cx, cy, col)
+    def reveal(self, is_yang):
+        self._val = is_yang
+        self.state = 'revealed'
+        self._draw()
 
     def reset(self):
-        if self._pulse_ev: self._pulse_ev.cancel()
-        self.state = 'idle'
-        self._update_labels()
-        self._draw_bg()
+        self.state = 'empty'; self._val = None; self._draw()
 
-    def _update_labels(self):
-        if self.state == 'idle':
-            self._name_lbl.color = DIM
-            self._main_lbl.text  = "·"
-            self._main_lbl.color = DIM
-            self._type_lbl.text  = ""
-        elif self.state == 'pending':
-            self._name_lbl.color = CYAN
-            self._main_lbl.text  = ""
-            self._type_lbl.text  = ""
-        elif self.state == 'yang':
-            self._name_lbl.color = YELL
-            self._main_lbl.text  = ""   # 数字由 canvas 绘制
-            self._type_lbl.text  = "阳"
-            self._type_lbl.color = YELL
-        elif self.state == 'yin':
-            self._name_lbl.color = CYAN
-            self._main_lbl.text  = ""
-            self._type_lbl.text  = "阴"
-            self._type_lbl.color = CYAN
+    def _draw(self, *_):
+        self.canvas.clear()
+        x, y, w, h = self.x, self.y, self.width, self.height
+        if w < 4 or h < 4: return
 
+        if self.state == 'empty':
+            # dim placeholder line
+            with self.canvas:
+                Color(*DIM[:3], 0.10)
+                Rectangle(pos=(x, y+h/2-dp(0.5)), size=(w, dp(1)))
+            draw_text(self.canvas, YN[self.idx], x+dp(4), y+h/2-sp(6), sp(12), (*DIM[:3], 0.30))
+            # ghost LED digit "8" shape
+            draw_led_digit(self.canvas, '8', x+w*0.38, y+h/2,
+                           min(h*0.45, dp(18)), min(h*0.70, dp(30)),
+                           (*DIM[:3], 0.06), dp(1.5))
+        else:
+            col = GOLD if self._val else CYAN
+            num = "1" if self._val else "0"
+            typ = "\u9633" if self._val else "\u9634"
+            bg_c = [0.14, 0.12, 0.04] if self._val else [0.04, 0.10, 0.14]
+            with self.canvas:
+                Color(*bg_c, 0.5)
+                Rectangle(pos=(x, y+dp(1)), size=(w, h-dp(2)))
+            # yao name
+            draw_text(self.canvas, YN[self.idx], x+dp(4), y+h/2-sp(6), sp(12), (*col[:3], 0.65))
+            # LED digit
+            led_w = min(h*0.45, dp(18))
+            led_h = min(h*0.70, dp(30))
+            draw_led_digit(self.canvas, num, x+w*0.38, y+h/2, led_w, led_h, col[:3], dp(2.5))
+            # small yao line
+            lx = x + w * 0.54
+            lw2 = w * 0.26
+            draw_yao_line(self.canvas, lx, y+h/2, lw2, self._val, col[:3], dp(2.5))
+            # type label
+            draw_text(self.canvas, typ + "\u723B", 0, y+h/2-sp(5), sp(11), (*col[:3], 0.50), center_x=x+w*0.90)
 
-# ══════════════════════════════════════════════
-#  按住起卦按钮（1.5 秒）
-# ══════════════════════════════════════════════
-class HoldButton(FloatLayout):
-    HOLD_SECS = 1.5
-
+# ---- HoldButton with idle glow effect (#5) ----
+class HoldButton(Widget):
+    HOLD = 1.5
     def __init__(self, on_complete=None, **kw):
         super().__init__(**kw)
-        self._cb       = on_complete
-        self._holding  = False
-        self._prog     = 0.0
-        self._done     = False
-        self._ev       = None
-        self.size_hint_y = None
-        self.height    = dp(64)
+        self._cb = on_complete
+        self._hold = False; self._prog = 0; self._done = False; self._ev = None
+        self._phase = 0
+        self._idle_ev = Clock.schedule_interval(self._idle_tick, 0.030)
+        self.size_hint_y = None; self.height = dp(72)
+        self.bind(pos=self._draw, size=self._draw)
+        Clock.schedule_once(lambda dt: self._draw(), 0)
 
-        # 主 Label
-        self._lbl = Label(
-            text="◉  按住起卦  CAST",
-            font_name=CN, font_size=sp(17), bold=True,
-            color=WHITE,
-            size_hint=(1,1),
-            pos_hint={'x':0,'y':0},
-            halign='center', valign='middle')
-        self._lbl.bind(size=lambda w,s: setattr(w,'text_size',s))
-        self.add_widget(self._lbl)
+    def _idle_tick(self, dt):
+        if not self._hold and not self._done:
+            self._phase += dt
+            self._draw()
 
-        self.bind(pos=self._redraw, size=self._redraw)
-        self._redraw()
-
-    def _redraw(self, *a):
-        self.canvas.before.clear()
-        x,y,w,h = self.x, self.y, self.width, self.height
+    def _draw(self, *_):
+        self.canvas.clear()
+        x, y, w, h = self.x, self.y, self.width, self.height
         p = self._prog
+        if self._done: mc = GREEN[:3]
+        elif self._hold: mc = GREEN[:3]
+        else: mc = PINK[:3]
 
-        with self.canvas.before:
-            # 背景
-            if self._done:
-                Color(0.0, 0.15, 0.0, 1)
-            elif self._holding:
-                Color(0.02, 0.10, 0.02, 1)
-            else:
-                Color(0.04, 0.02, 0.10, 1)
-            RoundedRectangle(pos=(x,y), size=(w,h), radius=[dp(10)])
+        # idle breathing glow
+        idle_glow = 0
+        if not self._hold and not self._done:
+            idle_glow = 0.5 + 0.5 * math.sin(self._phase * 2 * math.pi / 1.5)
 
-            # 进度填充（左到右亮色）
-            if p > 0:
-                pw = (w-dp(4)) * p
-                Color(*GREEN[:3], 0.25)
-                RoundedRectangle(pos=(x+dp(2),y+dp(2)), size=(pw, h-dp(4)), radius=[dp(8)])
+        ba = 0.50 if self._hold else (0.25 + 0.15 * idle_glow)
+        ga = 0.18 if self._hold else (0.08 + 0.12 * idle_glow)
 
-            # 外边框霓虹
-            if self._done:
-                rc,gc,bc = GREEN[:3]
-            elif self._holding:
-                rc,gc,bc = GREEN[:3]
-            else:
-                rc,gc,bc = PURP[:3]
+        draw_chamfer_box(self.canvas, x, y, w, h, mc,
+                         border_a=ba, glow_a=ga)
+        if p > 0:
+            pw = max(dp(4), (w - dp(6)) * p)
+            with self.canvas:
+                Color(*GREEN[:3], 0.18)
+                Rectangle(pos=(x+dp(3), y+dp(3)), size=(pw, h-dp(6)))
 
-            Color(rc,gc,bc,0.12); Line(rounded_rectangle=(x,y,w,h,dp(10)), width=dp(8))
-            Color(rc,gc,bc,0.35); Line(rounded_rectangle=(x,y,w,h,dp(10)), width=dp(3.5))
-            Color(rc,gc,bc,0.90); Line(rounded_rectangle=(x,y,w,h,dp(10)), width=dp(1.2))
+        # idle outer ring pulse
+        if not self._hold and not self._done:
+            with self.canvas:
+                Color(*mc, 0.06 * idle_glow)
+                pts = _cpts(x-dp(3), y-dp(3), w+dp(6), h+dp(6), dp(12))
+                bpts = pts + [pts[0], pts[1]]
+                Line(points=bpts, width=dp(2), close=False)
 
-        # 更新文字
+        mid_y = y + h/2
         if self._done:
-            self._lbl.text  = "✦  天机已成  ✦"
-            self._lbl.color = GREEN
-        elif self._holding:
+            draw_text(self.canvas, "\u5929\u673a\u5df2\u6210", 0, mid_y+sp(2), sp(22), GREEN, center_x=x+w/2)
+            draw_text(self.canvas, "DIVINATION COMPLETE", 0, mid_y-sp(16), sp(11), (*GREEN[:3], 0.45), center_x=x+w/2)
+        elif self._hold:
             pct = int(p * 100)
-            self._lbl.text  = f"[  {pct}%  ]  感应中…"
-            self._lbl.color = GREEN
+            draw_text(self.canvas, f"\u611f\u5e94\u5929\u673a {pct}%", 0, mid_y+sp(2), sp(22), GREEN, center_x=x+w/2)
+            draw_text(self.canvas, "CHANNELING", 0, mid_y-sp(16), sp(11), (*GREEN[:3], 0.45), center_x=x+w/2)
         else:
-            self._lbl.text  = "◉  按住起卦  CAST"
-            self._lbl.color = WHITE
+            draw_text(self.canvas, "\u6309\u4f4f \u00b7 \u611f\u5e94\u5929\u673a", 0, mid_y+sp(2), sp(20), WHITE, center_x=x+w/2)
+            draw_text(self.canvas, "HOLD 1.5s", 0, mid_y-sp(16), sp(11), (*PINK[:3], 0.45), center_x=x+w/2)
 
-    def on_touch_down(self, touch):
-        if self._done or not self.collide_point(*touch.pos): return False
-        self._holding = True; self._prog = 0.0
+    def on_touch_down(self, t):
+        if self._done or not self.collide_point(*t.pos): return False
+        self._hold = True; self._prog = 0
         if self._ev: self._ev.cancel()
-        self._ev = Clock.schedule_interval(self._tick, 0.025)
-        self._redraw(); return True
-
-    def on_touch_up(self, touch):
-        if not self._holding: return False
-        self._holding = False
+        self._ev = Clock.schedule_interval(self._tick, 0.025); self._draw(); return True
+    def on_touch_up(self, t):
+        if not self._hold: return False
+        self._hold = False
         if self._ev: self._ev.cancel()
-        if self._prog < 1.0:
-            self._prog = 0.0
-            self._redraw()
+        if self._prog < 1.0: self._prog = 0; self._draw()
         return True
-
     def _tick(self, dt):
-        self._prog += dt / self.HOLD_SECS
+        self._prog += dt / self.HOLD
         if self._prog >= 1.0:
-            self._prog = 1.0; self._done = True
-            self._ev.cancel(); self._holding = False
-            self._redraw()
+            self._prog = 1.0; self._done = True; self._ev.cancel(); self._hold = False
+            self._draw()
             if self._cb: self._cb()
-        else:
-            self._redraw()
-
+        else: self._draw()
     def reset(self):
         if self._ev: self._ev.cancel()
-        self._prog=0.0; self._holding=False; self._done=False
-        self._redraw()
+        self._prog = 0; self._hold = False; self._done = False; self._draw()
 
+# ---- TapButton: Chinese big English small (#6) ----
+class TapButton(Widget):
+    def __init__(self, text_cn, text_en="", col=None, on_press=None, **kw):
+        super().__init__(**kw)
+        self._cn = text_cn; self._en = text_en
+        self._col = col or CYAN; self._on_press = on_press; self._pressed = False
+        self.size_hint_y = None; self.height = kw.get('height', dp(44))
+        self.bind(pos=self._redraw, size=self._redraw)
+        Clock.schedule_once(lambda dt: self._redraw(), 0)
+    def _redraw(self, *_):
+        self.canvas.clear()
+        x, y, w, h = self.x, self.y, self.width, self.height
+        draw_chamfer_box(self.canvas, x, y, w, h, self._col[:3],
+                         cut=dp(10), border_a=0.35 if self._pressed else 0.22,
+                         glow_a=0.10 if self._pressed else 0.05, scanlines=False, band=False)
+        mid_y = y + h / 2
+        if self._en:
+            draw_text(self.canvas, self._cn, 0, mid_y+sp(1), sp(16), (*self._col[:3], 0.90), center_x=x+w/2)
+            draw_text(self.canvas, self._en, 0, mid_y-sp(14), sp(11), (*self._col[:3], 0.40), center_x=x+w/2)
+        else:
+            draw_text(self.canvas, self._cn, 0, mid_y-sp(8), sp(16), (*self._col[:3], 0.85), center_x=x+w/2)
+    def on_touch_down(self, t):
+        if not self.collide_point(*t.pos): return False
+        self._pressed = True; self._redraw(); return True
+    def on_touch_up(self, t):
+        if not self._pressed: return False
+        self._pressed = False; self._redraw()
+        if self.collide_point(*t.pos) and self._on_press: self._on_press()
+        return True
 
-# ══════════════════════════════════════════════
-#  分隔线工具
-# ══════════════════════════════════════════════
-def hline(color, h=dp(1)):
-    w = Widget(size_hint_y=None, height=h)
-    with w.canvas:
-        Color(*color)
-        rc = Rectangle(pos=w.pos, size=w.size)
-    w.bind(pos=lambda ww,*a: setattr(rc,'pos',ww.pos),
-           size=lambda ww,*a: setattr(rc,'size',ww.size))
-    return w
+# ---- HexagramDisplay (result page, 6 yao lines) ----
+class HexagramDisplay(Widget):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self._bits = None
+        self.bind(pos=self._draw, size=self._draw)
+    def set_bits(self, bits):
+        self._bits = bits; self._draw()
+    def _draw(self, *_):
+        self.canvas.clear()
+        x, y, w, h = self.x, self.y, self.width, self.height
+        if not self._bits or w < 4 or h < 4: return
+        draw_chamfer_box(self.canvas, x, y, w, h, CYAN[:3],
+                         border_a=0.22, glow_a=0.10)
+        pad = dp(10)
+        ix, iy, iw, ih = x+pad, y+pad, w-2*pad, h-2*pad
+        gap_y = ih / 5 if len(self._bits) > 1 else 0
+        lw = max(dp(3), min(ih * 0.07, dp(5)))
+        for i, bit in enumerate(self._bits):
+            cy2 = iy + i * gap_y
+            col = GOLD[:3] if bit else CYAN[:3]
+            draw_yao_line(self.canvas, ix, cy2, iw, bit, col, lw)
 
-
-# ══════════════════════════════════════════════
-#  主界面
-# ══════════════════════════════════════════════
+# ========== MAIN SCREEN (v10.0) ==========
 class MainScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
-        self._bits    = []
-        self._casting = False
+        self._bits = []; self._casting = False
         self._build()
 
     def _build(self):
-        root = BoxLayout(orientation="vertical",
-                         spacing=dp(6),
-                         padding=[dp(12), dp(8), dp(12), dp(8)])
+        # Spacing spec: padding=16 all sides, element gap=8, button gap=10
+        PAD = dp(16)
+        GAP = dp(8)
+        root = BoxLayout(orientation='vertical', spacing=GAP,
+                         padding=[PAD, PAD, PAD, PAD])
         with root.canvas.before:
-            Color(*BG)
-            self._bg = Rectangle(pos=root.pos, size=root.size)
-        root.bind(pos=lambda w,*a: setattr(self._bg,'pos',w.pos),
-                  size=lambda w,*a: setattr(self._bg,'size',w.size))
+            Color(*BG); self._bg = Rectangle(pos=root.pos, size=root.size)
+        root.bind(pos=lambda w,*_: setattr(self._bg,'pos',w.pos),
+                  size=lambda w,*_: setattr(self._bg,'size',w.size))
 
-        # ── 标题 ─────────────────────────────
-        title_box = BoxLayout(size_hint_y=None, height=dp(52))
-        with title_box.canvas.before:
-            Color(0.0, 0.035, 0.08, 1)
-            self._tb_rect = RoundedRectangle(pos=title_box.pos, size=title_box.size, radius=[dp(10)])
-        title_box.bind(pos=lambda w,*a: setattr(self._tb_rect,'pos',w.pos),
-                       size=lambda w,*a: setattr(self._tb_rect,'size',w.size))
+        self._smoke = SmokeLayer()
+        self.add_widget(self._smoke)
 
-        title = Label(
-            text="[color=#00f5ff]天[/color][color=#b44fff]机[/color]"
-                 "[color=#445566] · [/color][color=#39ff14]TIANJI[/color]",
-            markup=True, font_name=CN, font_size=sp(22), bold=True)
-        title_box.add_widget(title)
-        root.add_widget(title_box)
+        # ---- Top bar: compact header row ----
+        top_bar = BoxLayout(size_hint_y=None, height=dp(36), spacing=dp(6))
+        # Title left
+        t1 = Label(text="[b]\u5929\u673a[/b]", markup=True, font_name=CN,
+            font_size=sp(24), color=WHITE, halign='left', valign='middle')
+        t1.bind(size=lambda w,s: setattr(w,'text_size',s))
+        top_bar.add_widget(t1)
+        # Subtitle
+        t2 = Label(text="[color=#66708a]TIANJI CONSOLE[/color]", markup=True,
+            font_name=CN, font_size=sp(10), halign='left', valign='middle',
+            size_hint_x=None, width=dp(100))
+        t2.bind(size=lambda w,s: setattr(w,'text_size',s))
+        top_bar.add_widget(t2)
+        # Status right
+        self._status = Label(
+            text="[color=#4deb66]\u25cf[/color] [color=#66708a]READY[/color]",
+            markup=True, font_name=CN, font_size=sp(11),
+            size_hint_x=None, width=dp(60), halign='right', valign='middle')
+        self._status.bind(size=lambda w,s: setattr(w,'text_size',s))
+        top_bar.add_widget(self._status)
+        root.add_widget(top_bar)
 
-        root.add_widget(hline(CYAN))
+        # ---- Terminal + log line ----
+        self._log = Label(
+            text=f"[color=#00def2]TIANJI_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]",
+            markup=True, font_name=CN, font_size=sp(11),
+            size_hint_y=None, height=dp(18), halign='left', valign='middle')
+        self._log.bind(size=lambda w,s: setattr(w,'text_size',s))
+        root.add_widget(self._log)
 
-        # ── 六爻卡片区（弹性填充）────────────
-        cards_wrap = BoxLayout(orientation="vertical", spacing=dp(4))
+        # ---- 6 yao slots: fill remaining space ----
+        # Use a sub-BoxLayout that takes all remaining vertical space
+        slot_box = BoxLayout(orientation='vertical', spacing=dp(4))
+        self._slots = [None]*6
+        for i in range(5, -1, -1):
+            s = YaoSlot(i)
+            s.size_hint_y = 1  # equal share of remaining space
+            self._slots[i] = s
+            slot_box.add_widget(s)
+        root.add_widget(slot_box)
 
-        row_label = BoxLayout(size_hint_y=None, height=dp(18))
-        row_label.add_widget(Label(
-            text="[color=#1e2d45]─── 六 爻 ───[/color]",
-            markup=True, font_name=CN, font_size=sp(10), halign='center'))
-        cards_wrap.add_widget(row_label)
+        # ---- Bottom buttons with proper spacing ----
+        btn_spacer = dp(10)
+        root.add_widget(Widget(size_hint_y=None, height=btn_spacer))
 
-        # 烟雾层（跨两行卡片）
-        self._smoke = SmokeOverlay()
-
-        # 卡片容器（用 FloatLayout 叠加烟雾层）
-        cards_float = FloatLayout()
-        cards_v = BoxLayout(orientation="vertical", spacing=dp(8),
-                            size_hint=(1,1))
-
-        self._cards = []
-        for row_i in range(2):
-            row = BoxLayout(spacing=dp(8))
-            row.add_widget(Widget())
-            for ci in range(3):
-                idx = row_i * 3 + ci
-                card = NeonBitCard(idx, smoke_layer=self._smoke)
-                self._cards.append(card)
-                row.add_widget(card)
-            row.add_widget(Widget())
-            cards_v.add_widget(row)
-
-        cards_float.add_widget(cards_v)
-        cards_float.add_widget(self._smoke)
-        cards_wrap.add_widget(cards_float)
-
-        # 下卦/上卦标注
-        lab_row = BoxLayout(size_hint_y=None, height=dp(16))
-        for txt in ["← 下 卦 →", "← 上 卦 →"]:
-            lab_row.add_widget(Label(
-                text=f"[color=#1e2d45]{txt}[/color]",
-                markup=True, font_name=CN, font_size=sp(9), halign='center'))
-        cards_wrap.add_widget(lab_row)
-
-        root.add_widget(cards_wrap)
-
-        # ── 进度提示 ─────────────────────────
-        self._prog_lbl = Label(
-            text="[color=#1e2d45]— 等待感应 —[/color]",
-            markup=True, font_name=CN, font_size=sp(13),
-            size_hint_y=None, height=dp(30))
-        root.add_widget(self._prog_lbl)
-
-        root.add_widget(hline(PURP))
-
-        # ── 按住起卦 ─────────────────────────
-        self._hold_btn = HoldButton(on_complete=self._on_hold_done)
+        self._hold_btn = HoldButton(on_complete=self._on_done)
         root.add_widget(self._hold_btn)
 
-        # ── 重新起卦 ─────────────────────────
-        rst = neon_btn("↺  重新", DIM, fs=sp(12),
-                       size_hint_y=None, height=dp(36))
-        rst.bind(on_press=lambda *a: self._reset())
+        root.add_widget(Widget(size_hint_y=None, height=btn_spacer))
+
+        rst = TapButton("\u91cd\u7f6e", "RESET", col=DIM, height=dp(40), on_press=self._reset)
         root.add_widget(rst)
-
-        root.add_widget(hline(DIM))
-
-        # ── 水印 ─────────────────────────────
-        root.add_widget(Label(
-            text="[color=#0e1828]WADJY  ·  天机 TIANJI  v2.5[/color]",
-            markup=True, font_name=CN, font_size=sp(8),
-            size_hint_y=None, height=dp(14)))
-
         self.add_widget(root)
 
-    # ── 逻辑 ─────────────────────────────────
-    def _on_hold_done(self):
+    def _on_done(self):
+        """One press generates all 6 yao, revealed sequentially."""
         if self._casting: return
         self._casting = True
-        self._bits = []
-        results = [random.choice([True,False]) for _ in range(6)]
+        self._bits = [random.choice([True, False]) for _ in range(6)]
+        for i in range(6):
+            delay = i * 0.28
+            Clock.schedule_once(lambda dt, ii=i: self._reveal_one(ii), delay)
+        Clock.schedule_once(lambda dt: self._go_result(), 6*0.28 + 0.6)
 
-        for i, is_yang in enumerate(results):
-            d = i * 0.38
-            Clock.schedule_once(lambda dt,ii=i: self._cards[ii].set_pending(), d)
-            Clock.schedule_once(lambda dt,ii=i,v=is_yang: self._reveal(ii,v), d+0.22)
+    def _reveal_one(self, idx):
+        is_yang = self._bits[idx]
+        self._slots[idx].reveal(is_yang)
+        val = "1" if is_yang else "0"
+        col = "#ffd633" if is_yang else "#00def2"
+        typ = "\u9633\u723B" if is_yang else "\u9634\u723B"
+        self._status.text = f"[color={col}]\u25cf[/color] [color=#66708a]{idx+1}/6[/color]"
+        self._log.text = f"[color=#00def2]TIANJI_LINK[/color]  [color={col}]{YN[idx]} = {val} ({typ})[/color]"
+        self._smoke.burst(self._slots[idx].center_x, self._slots[idx].center_y,
+                          GOLD[:3] if is_yang else CYAN[:3])
 
-        Clock.schedule_once(lambda dt: self._go_result(results), 6*0.38+0.6)
-
-    def _reveal(self, idx, is_yang):
-        self._cards[idx].reveal(is_yang)
-        self._bits.append(is_yang)
-        names = ["初爻","二爻","三爻","四爻","五爻","上爻"]
-        sym  = "━━━ 阳" if is_yang else "━ ━ 阴"
-        col  = "#ffe600" if is_yang else "#00f5ff"
-        self._prog_lbl.text = f"[color={col}]{names[idx]}  {sym}[/color]"
-
-    def _go_result(self, results):
+    def _go_result(self):
         self._casting = False
-        rs = self.manager.get_screen("result")
-        rs.show_hexagram(results)
+        self.manager.get_screen("result").show(self._bits)
         self.manager.transition = SlideTransition(direction="left")
         self.manager.current = "result"
 
     def _reset(self):
         self._bits = []; self._casting = False
-        for c in self._cards: c.reset()
         self._hold_btn.reset()
-        self._prog_lbl.text = "[color=#1e2d45]— 等待感应 —[/color]"
+        for s in self._slots:
+            if s: s.reset()
+        self._status.text = "[color=#4deb66]\u25cf[/color] [color=#66708a]READY[/color]"
+        self._log.text = f"[color=#00def2]TIANJI_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]"
 
-
-# ══════════════════════════════════════════════
-#  结果界面
-# ══════════════════════════════════════════════
+# ========== RESULT SCREEN (v10.0) ==========
 class ResultScreen(Screen):
     def __init__(self, **kw):
-        super().__init__(**kw)
-        self._build()
+        super().__init__(**kw); self._build()
 
     def _build(self):
-        root = BoxLayout(orientation="vertical",
-                         padding=[dp(12),dp(8),dp(12),dp(8)],
-                         spacing=dp(6))
+        root = BoxLayout(orientation='vertical',
+                         padding=[dp(20), dp(10), dp(20), dp(10)], spacing=dp(6))
         with root.canvas.before:
-            Color(*BG)
-            self._bg = Rectangle(pos=root.pos, size=root.size)
-        root.bind(pos=lambda w,*a: setattr(self._bg,'pos',w.pos),
-                  size=lambda w,*a: setattr(self._bg,'size',w.size))
+            Color(*BG); self._bg = Rectangle(pos=root.pos, size=root.size)
+        root.bind(pos=lambda w,*_: setattr(self._bg,'pos',w.pos),
+                  size=lambda w,*_: setattr(self._bg,'size',w.size))
 
-        # ── 顶栏 ─────────────────────────────
-        top = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))
-        back = neon_btn("◀ 返回", CYAN, fs=sp(13), size_hint_x=None, width=dp(90))
-        back.bind(on_press=self._go_back)
-        top.add_widget(back)
-        self._title_lbl = Label(
-            text="[color=#00f5ff]卦象解读[/color]",
-            markup=True, font_name=CN, font_size=sp(17), bold=True)
-        top.add_widget(self._title_lbl)
-        root.add_widget(top)
-        root.add_widget(hline(CYAN))
+        # Hero (#11): hex display left + info right, SAME HEIGHT
+        HERO_H = dp(160)
+        hero = BoxLayout(size_hint_y=None, height=HERO_H, spacing=dp(12))
+        self._hex_w = HexagramDisplay()
+        self._hex_w.size_hint = (None, 1)
+        self._hex_w.width = dp(90)
+        hero.add_widget(self._hex_w)
 
-        # ── 卦象信息 ─────────────────────────
-        kua = BoxLayout(size_hint_y=None, height=dp(96), spacing=dp(10))
-        self._sym_lbl = Label(text="", font_name=CN, font_size=sp(58),
-                              color=CYAN, size_hint_x=None, width=dp(86))
-        kua.add_widget(self._sym_lbl)
-        info = BoxLayout(orientation="vertical", spacing=dp(2))
-        self._name_lbl = Label(text="", font_name=CN, font_size=sp(21),
-                               markup=True, halign="left", valign="middle")
-        self._name_lbl.bind(size=lambda w,s: setattr(w,'text_size',s))
-        self._pos_lbl  = Label(text="", font_name=CN, font_size=sp(11),
-                               color=DIM, markup=True, halign="left", valign="middle")
-        self._pos_lbl.bind(size=lambda w,s: setattr(w,'text_size',s))
-        self._gushi_lbl= Label(text="", font_name=CN, font_size=sp(12),
-                               color=YELL, markup=True, halign="left", valign="middle")
-        self._gushi_lbl.bind(size=lambda w,s: setattr(w,'text_size',s))
-        info.add_widget(self._name_lbl)
-        info.add_widget(self._pos_lbl)
-        info.add_widget(self._gushi_lbl)
-        kua.add_widget(info)
-        root.add_widget(kua)
-        root.add_widget(hline(PURP))
+        # Info column: name biggest > gushi > seq+trig smallest
+        info = BoxLayout(orientation='vertical', spacing=dp(2))
+        self._name = Label(text="", font_name=CN, font_size=sp(38), markup=True,
+            bold=True, halign='left', valign='middle', size_hint_y=0.38)
+        self._name.bind(size=lambda w,s: setattr(w,'text_size',s))
+        info.add_widget(self._name)
+        self._gushi = Label(text="", font_name=CN, font_size=sp(15), markup=True,
+            halign='left', valign='top', size_hint_y=0.38)
+        self._gushi.bind(size=lambda w,s: setattr(w,'text_size',s))
+        info.add_widget(self._gushi)
+        self._seq = Label(text="", font_name=CN, font_size=sp(12), markup=True,
+            halign='left', valign='middle', size_hint_y=0.12)
+        self._seq.bind(size=lambda w,s: setattr(w,'text_size',s))
+        info.add_widget(self._seq)
+        self._trig = Label(text="", font_name=CN, font_size=sp(12), markup=True,
+            halign='left', valign='middle', size_hint_y=0.12)
+        self._trig.bind(size=lambda w,s: setattr(w,'text_size',s))
+        info.add_widget(self._trig)
+        hero.add_widget(info)
+        root.add_widget(hero)
 
-        # ── 六爻缩略行 ───────────────────────
-        self._yao_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(4))
-        root.add_widget(self._yao_row)
-        root.add_widget(hline(DIM))
-
-        # ── 滚动详情 ─────────────────────────
+        # Scroll
         sv = ScrollView(do_scroll_x=False)
-        self._detail = Label(
-            text="", markup=True, font_name=CN, font_size=sp(12.5),
-            color=TEXT, size_hint_y=None,
-            halign="left", valign="top")
-        sv.bind(width=lambda sv,w: setattr(self._detail,'text_size',(w-dp(8),None)))
-        self._detail.bind(texture_size=self._detail.setter('size'))
-        sv.add_widget(self._detail)
+        inner = BoxLayout(orientation='vertical', size_hint_y=None,
+                          spacing=dp(8), padding=[0, dp(4), 0, dp(4)])
+        inner.bind(minimum_height=inner.setter('height'))
+        self._inner = inner
+
+        # Section: meaning (#7 bigger text)
+        inner.add_widget(self._sec_hdr("\u5366\u8c61\u542b\u4e49", CYAN))
+        self._desc = self._clbl(sp(16))
+        inner.add_widget(self._desc)
+
+        # Section: baihua (#7 bigger text)
+        inner.add_widget(self._sec_hdr("\u767d\u8bdd\u89e3\u8bfb", GREEN))
+        self._bh = self._clbl(sp(16))
+        inner.add_widget(self._bh)
+
+        # Section: yao details (#9 smaller text)
+        inner.add_widget(self._sec_hdr("\u516d\u723b\u8be6\u89e3", PURP))
+        self._yao = []
+        for i in range(6):
+            hdr = Label(text="", markup=True, font_name=CN, font_size=sp(13),
+                bold=True, size_hint_y=None, height=dp(22), halign='left', valign='middle')
+            hdr.bind(size=lambda w,s: setattr(w,'text_size',s))
+            body = self._clbl(sp(13))
+            self._yao.append((hdr, body))
+            inner.add_widget(hdr); inner.add_widget(body)
+
+        inner.add_widget(Label(
+            text="[color=#66708a]\u6613\u4ee5\u9053\u9634\u9633 \u00b7 \u5366\u8c61\u4ec5\u4f9b\u53c2\u8003[/color]",
+            markup=True, font_name=CN, font_size=sp(11),
+            size_hint_y=None, height=dp(24), halign='center', valign='middle'))
+
+        sv.add_widget(inner)
         root.add_widget(sv)
 
-        # ── 底部按钮 ─────────────────────────
-        again = neon_btn("◀  重新起卦", PINK, fs=sp(15),
-                         size_hint_y=None, height=dp(52))
-        again.bind(on_press=self._go_back)
-        root.add_widget(again)
+        btn = TapButton("\u91cd\u65b0\u8d77\u5366", "NEW DIVINATION", col=PINK, height=dp(46), on_press=self._back)
+        root.add_widget(btn)
         self.add_widget(root)
 
-    def _go_back(self, *a):
+    def _sec_hdr(self, text, col):
+        w = Widget(size_hint_y=None, height=dp(30))
+        def _d(ww, *_):
+            ww.canvas.clear()
+            x, y, ww2, hh = ww.x, ww.y, ww.width, ww.height
+            r, g, b = col[:3]
+            with ww.canvas:
+                Color(r, g, b, 0.60)
+                Rectangle(pos=(x, y), size=(dp(3), hh))
+                Color(r, g, b, 0.10)
+                Rectangle(pos=(x+dp(8), y+hh/2-dp(0.5)), size=(ww2-dp(8), dp(1)))
+            draw_text(ww.canvas, text, x+dp(12), y+dp(6), sp(16), col)
+        w.bind(pos=_d, size=_d)
+        return w
+
+    def _clbl(self, fs=None):
+        lbl = Label(text="", markup=True, font_name=CN, font_size=fs or sp(15),
+            color=SOFT, size_hint_y=None, halign='left', valign='top')
+        lbl.bind(size=lambda w,s: setattr(w,'text_size',(s[0],None)))
+        lbl.bind(texture_size=lbl.setter('size'))
+        return lbl
+
+    def _back(self):
         self.manager.get_screen("main")._reset()
         self.manager.transition = SlideTransition(direction="right")
         self.manager.current = "main"
 
-    def show_hexagram(self, lines: list):
-        il = tuple(1 if v else 0 for v in lines)
+    def show(self, bits):
+        il = tuple(1 if v else 0 for v in bits)
         data = HEXAGRAMS.get(il)
-        if data is None:
-            self._detail.text = f"[color=#ff2d9b]卦象未找到  键:{il}[/color]"
+        if not data:
+            self._desc.text = f"[color=#f24494]\u5366\u8c61\u672a\u627e\u5230: {il}[/color]"
             return
-
-        seq, name, position, gushi, desc, baihua = data
+        seq, name, pos, gushi, desc, baihua = data
         lo, up = il[:3], il[3:]
         lt = TRIGRAMS.get(lo, ("?","?","?"))
         ut = TRIGRAMS.get(up, ("?","?","?"))
-        sym = TSYM.get(up,"?") + TSYM.get(lo,"?")
 
-        self._title_lbl.text = f"[color=#00f5ff]第 {seq:02d} 卦  ·  {name} 卦[/color]"
-        self._sym_lbl.text   = sym
-        self._name_lbl.text  = f"[color=#00f5ff]{name} 卦[/color]"
-        self._pos_lbl.text   = f"[color=#1e2d45]{ut[2]}上{lt[2]}下  ·  {position}[/color]"
-        self._gushi_lbl.text = f"[color=#ffe600]{gushi}[/color]"
+        self._hex_w.set_bits(il)
+        self._name.text = f"[color=#00def2]{name}[/color]"
+        self._gushi.text = f"[color=#ffd633]{gushi}[/color]"
+        self._seq.text = f"[color=#66708a]\u7b2c{seq:02d}\u5366  HEXAGRAM #{seq:02d}[/color]"
+        self._trig.text = f"[color=#66708a]{ut[0]}{ut[2]}\u4e0a  {lt[0]}{lt[2]}\u4e0b  {pos}[/color]"
 
-        # 六爻缩略
-        self._yao_row.clear_widgets()
-        yn = ["初","二","三","四","五","上"]
+        self._desc.text = f"[color=#c8d4e0]{desc}[/color]"
+
+        # Clean baihua (#10 remove leading tags)
+        bh_text = baihua
+        for prefix in ["\u3010\u767d\u8bdd\u3011", "\u767d\u8bdd\uff1a"]:
+            if bh_text.startswith(prefix):
+                bh_text = bh_text[len(prefix):]
+        bh_text = bh_text.strip()
+        # Enrich (#8)
+        bh_text += "\n\n\u5efa\u8bae\uff1a\u5728\u5f53\u524d\u5f62\u52bf\u4e0b\uff0c\u5e94\u4fdd\u6301\u5185\u5fc3\u5e73\u9759\uff0c\u987a\u5e94\u81ea\u7136\u89c4\u5f8b\uff0c\u4e0d\u5b9c\u8fc7\u4e8e\u6025\u8e81\u3002\u8c28\u614e\u884c\u4e8b\uff0c\u6ce8\u610f\u89c2\u5bdf\u5468\u56f4\u73af\u5883\u7684\u53d8\u5316\uff0c\u628a\u63e1\u65f6\u673a\u65b9\u53ef\u6709\u6240\u4f5c\u4e3a\u3002"
+        self._bh.text = f"[color=#4deb66]{bh_text}[/color]"
+
         for i in range(6):
-            col = "#ffe600" if il[i]==1 else "#00f5ff"
-            s   = "1" if il[i]==1 else "0"
-            self._yao_row.add_widget(Label(
-                text=f"[color={col}][b]{s}[/b]\n{yn[i]}[/color]",
-                markup=True, font_name=CN, font_size=sp(12), halign='center'))
-
-        # 爻辞
-        yf = ["初爻","二爻","三爻","四爻","五爻","上爻"]
-        yao_txt = ""
-        for i in range(6):
+            h, b = self._yao[i]
             yc, yb = get_yaoci(il, i)
-            col  = "#ffe600" if il[i]==1 else "#00f5ff"
-            bar  = "━━━━━" if il[i]==1 else "━━ ━━"
-            typ  = "阳" if il[i]==1 else "阴"
-            yao_txt += (
-                f"\n[color=#b44fff]▌ {yf[i]}[/color]  "
-                f"[color={col}]{bar} {typ}爻[/color]\n"
-                f"[color=#ffe600]{yc}[/color]\n"
-                f"[color=#c8d8e8]{yb}[/color]\n")
+            c = "#ffd633" if il[i] else "#00def2"
+            t = "\u9633\u723B" if il[i] else "\u9634\u723B"
+            v = "1" if il[i] else "0"
+            h.text = f"[color=#9e66fa]{YN[i]}[/color]  [color={c}][{v}] {t}[/color]"
+            b.text = f"[color=#ffd633]{yc}[/color]\n[color=#8a92a4]{yb}[/color]"
 
-        self._detail.text = (
-            f"[color=#00f5ff]◆ 卦义[/color]\n"
-            f"[color=#c8d8e8]{desc}[/color]\n\n"
-            f"[color=#00f5ff]◆ 白话解析[/color]\n"
-            f"[color=#39ff14]{baihua}[/color]\n\n"
-            f"[color=#b44fff]━━━ 爻辞详解 ━━━[/color]"
-            + yao_txt
-            + "\n[color=#1e2d45]— 易以道阴阳，仅供参考 —[/color]")
-
-
-# ══════════════════════════════════════════════
-#  App 入口
-# ══════════════════════════════════════════════
+# ---- App ----
 class TianJiApp(App):
     def build(self):
         for d in [os.path.dirname(os.path.abspath(__file__)), os.getcwd()]:
@@ -770,10 +694,8 @@ class TianJiApp(App):
         sm.add_widget(MainScreen(name="main"))
         sm.add_widget(ResultScreen(name="result"))
         return sm
-
     def get_application_name(self):
-        return "天机"
-
+        return "\u5929\u673a"
 
 if __name__ == "__main__":
     Window.size = (390, 844)

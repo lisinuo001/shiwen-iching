@@ -10,7 +10,7 @@ source.include_patterns = iching_data.py,yaoci_data.py,NotoSansCJK.otf,icon.png
 
 version = 10.0.0
 
-requirements = python3,kivy==2.3.0,pillow
+requirements = python3,kivy,pillow
 
 icon.filename = %(source.dir)s/icon.png
 presplash.filename = %(source.dir)s/icon.png

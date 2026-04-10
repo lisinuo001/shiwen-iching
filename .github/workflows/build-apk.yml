@@ -44,8 +44,10 @@ jobs:
 
       - name: Build APK
         working-directory: kivy_app
+        env:
+          KIVY_LOG_MODE: PYTHON
         run: |
-          yes | buildozer -v android debug
+          buildozer -v android debug
 
       - name: List bin directory
         run: |

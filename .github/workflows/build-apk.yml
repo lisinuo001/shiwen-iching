@@ -45,7 +45,14 @@ jobs:
       - name: Build APK
         working-directory: kivy_app
         run: |
-          yes | buildozer android debug 2>&1 | tail -50
+          yes | buildozer -v android debug
+
+      - name: List bin directory
+        run: |
+          echo "=== kivy_app/bin contents ==="
+          ls -la kivy_app/bin/ || echo "bin directory not found"
+          echo "=== searching for APK ==="
+          find . -name "*.apk" -type f || echo "no APK found"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -53,3 +60,4 @@ jobs:
           name: ShiWen-APK-v10
           path: kivy_app/bin/*.apk
           retention-days: 30
+          if-no-files-found: error

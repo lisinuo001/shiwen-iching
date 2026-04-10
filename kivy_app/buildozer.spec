@@ -1,14 +1,14 @@
 
 [app]
-title = 筮问 ShiWen
-package.name = shiwen
-package.domain = org.shiwen
+title = 天机
+package.name = tianji
+package.domain = org.tianji
 
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,otf
 source.include_patterns = iching_data.py,yaoci_data.py,NotoSansCJK.otf,icon.png
 
-version = 10.1.0
+version = 10.2.0
 
 requirements = python3,kivy,pillow
 

@@ -1,6 +1,6 @@
-
+﻿
 [app]
-title = 天机
+title = 澶╂満
 package.name = tianji
 package.domain = org.tianji
 
@@ -8,7 +8,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,otf
 source.include_patterns = iching_data.py,yaoci_data.py,NotoSansCJK.otf,icon.png
 
-version = 10.6.0
+version = 10.8.0
 
 requirements = python3,kivy,pillow
 
@@ -16,7 +16,7 @@ icon.filename = %(source.dir)s/icon.png
 presplash.filename = %(source.dir)s/icon.png
 
 orientation = portrait
-fullscreen = 0
+fullscreen = 1
 
 android.permissions = INTERNET
 android.api = 33

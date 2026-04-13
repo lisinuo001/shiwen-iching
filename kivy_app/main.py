@@ -330,7 +330,7 @@ class HoldButton(BoxLayout):
         self._phase = 0
         self.size_hint_y = None; self.height = dp(72)
         self.padding = [dp(8), dp(4)]
-        # text labels (native Label for proper rendering)
+        # text labels (native Label, disabled touch so parent gets events)
         self._lbl_cn = Label(text="\u6309\u4f4f \u00b7 \u611f\u5e94\u5929\u673a", font_name=CN,
             font_size=sp(20), color=WHITE, bold=True, halign='center', valign='middle',
             size_hint_y=0.6, markup=True)
@@ -339,6 +339,11 @@ class HoldButton(BoxLayout):
             font_size=sp(11), color=(*PINK[:3], 0.45), halign='center', valign='middle',
             size_hint_y=0.4, markup=True)
         self._lbl_en.bind(size=lambda w,s: setattr(w,'text_size',s))
+        # Disable touch on labels so HoldButton receives touch events
+        self._lbl_cn.on_touch_down = lambda t: False
+        self._lbl_cn.on_touch_up = lambda t: False
+        self._lbl_en.on_touch_down = lambda t: False
+        self._lbl_en.on_touch_up = lambda t: False
         self.add_widget(self._lbl_cn)
         self.add_widget(self._lbl_en)
         self._idle_ev = Clock.schedule_interval(self._idle_tick, 0.030)
@@ -437,12 +442,16 @@ class TapButton(BoxLayout):
             color=(*self._col[:3], 0.90), bold=True, halign='center', valign='middle',
             size_hint_y=0.6 if text_en else 1.0)
         self._lbl_cn.bind(size=lambda w,s: setattr(w,'text_size',s))
+        self._lbl_cn.on_touch_down = lambda t: False
+        self._lbl_cn.on_touch_up = lambda t: False
         self.add_widget(self._lbl_cn)
         if text_en:
             self._lbl_en = Label(text=text_en, font_name=CN, font_size=sp(11),
                 color=(*self._col[:3], 0.40), halign='center', valign='middle',
                 size_hint_y=0.4)
             self._lbl_en.bind(size=lambda w,s: setattr(w,'text_size',s))
+            self._lbl_en.on_touch_down = lambda t: False
+            self._lbl_en.on_touch_up = lambda t: False
             self.add_widget(self._lbl_en)
         self.bind(pos=self._redraw, size=self._redraw)
         Clock.schedule_once(lambda dt: self._redraw(), 0)
@@ -535,16 +544,24 @@ class MainScreen(Screen):
         self._log.bind(size=lambda w,s: setattr(w,'text_size',s))
         root.add_widget(self._log)
 
-        # ---- 6 yao slots: fill remaining space ----
-        # Use a sub-BoxLayout that takes all remaining vertical space
-        slot_box = BoxLayout(orientation='vertical', spacing=dp(4))
+        # ---- Central HUD decoration + 6 yao slots ----
+        # Decoration fills top space, slots have fixed height
+        center_box = BoxLayout(orientation='vertical', spacing=dp(6))
+
+        # HUD decoration (fills remaining space)
+        self._hud = Widget()
+        self._hud.bind(pos=self._draw_hud, size=self._draw_hud)
+        center_box.add_widget(self._hud)
+
+        # 6 yao slots with fixed height
         self._slots = [None]*6
         for i in range(5, -1, -1):
             s = YaoSlot(i)
-            s.size_hint_y = 1  # equal share of remaining space
+            s.size_hint_y = None
+            s.height = dp(44)
             self._slots[i] = s
-            slot_box.add_widget(s)
-        root.add_widget(slot_box)
+            center_box.add_widget(s)
+        root.add_widget(center_box)
 
         # ---- Bottom buttons with proper spacing ----
         btn_spacer = dp(10)
@@ -558,6 +575,43 @@ class MainScreen(Screen):
         rst = TapButton("\u91cd\u7f6e", "RESET", col=DIM, height=dp(40), on_press=self._reset)
         root.add_widget(rst)
         self.add_widget(root)
+
+    def _draw_hud(self, *_):
+        """Draw central HUD decoration in the empty space."""
+        w = self._hud
+        w.canvas.clear()
+        x, y, ww, hh = w.x, w.y, w.width, w.height
+        if ww < 10 or hh < 10:
+            return
+        cx, cy = x + ww/2, y + hh/2
+        # Concentric circles
+        for i, r in enumerate([min(ww, hh)*0.38, min(ww, hh)*0.28, min(ww, hh)*0.15]):
+            a = 0.08 + i * 0.04
+            with w.canvas:
+                Color(*CYAN[:3], a)
+                Line(circle=(cx, cy, r), width=dp(1))
+        # Cross hairs
+        cr = min(ww, hh) * 0.42
+        with w.canvas:
+            Color(*CYAN[:3], 0.06)
+            Line(points=[cx - cr, cy, cx + cr, cy], width=dp(0.8))
+            Line(points=[cx, cy - cr, cx, cy + cr], width=dp(0.8))
+        # Corner marks
+        cm = min(ww, hh) * 0.35
+        tk = dp(12)
+        with w.canvas:
+            Color(*CYAN[:3], 0.12)
+            Line(points=[cx-cm, cy+cm, cx-cm, cy+cm-tk], width=dp(1))
+            Line(points=[cx-cm, cy+cm, cx-cm+tk, cy+cm], width=dp(1))
+            Line(points=[cx+cm, cy+cm, cx+cm, cy+cm-tk], width=dp(1))
+            Line(points=[cx+cm, cy+cm, cx+cm-tk, cy+cm], width=dp(1))
+            Line(points=[cx-cm, cy-cm, cx-cm, cy-cm+tk], width=dp(1))
+            Line(points=[cx-cm, cy-cm, cx-cm+tk, cy-cm], width=dp(1))
+            Line(points=[cx+cm, cy-cm, cx+cm, cy-cm+tk], width=dp(1))
+            Line(points=[cx+cm, cy-cm, cx+cm-tk, cy-cm], width=dp(1))
+        # Center text
+        draw_text(w.canvas, "\u5929\u673a", 0, cy + sp(4), sp(32), (*CYAN[:3], 0.12), center_x=cx)
+        draw_text(w.canvas, "DIVINATION", 0, cy - sp(20), sp(11), (*CYAN[:3], 0.06), center_x=cx)
 
     def _on_done(self):
         """One press generates all 6 yao, revealed sequentially."""

@@ -1,4 +1,4 @@
-name: Build Android APK
+﻿name: Build Android APK
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
           cp iching_data.py kivy_app/
           cp yaoci_data.py kivy_app/
 
-      - name: Pre-flight Check (质检卡关)
+      - name: Pre-flight Check (璐ㄦ鍗″叧)
         working-directory: kivy_app
         run: |
           echo "Running pre-flight checks before build..."
@@ -83,7 +83,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TianJi-APK-v10.8
+          name: TianJi-APK-v10.8.0
           path: kivy_app/bin/*.apk
           retention-days: 30
           if-no-files-found: error

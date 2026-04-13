@@ -1,6 +1,5 @@
-﻿
 [app]
-title = 澶╂満
+title = tianji
 package.name = tianji
 package.domain = org.tianji
 
@@ -12,8 +11,8 @@ version = 10.8.0
 
 requirements = python3,kivy,pillow
 
-icon.filename = %(source.dir)s/icon.png
-presplash.filename = %(source.dir)s/icon.png
+icon.filename = %%(source.dir)s/icon.png
+presplash.filename = %%(source.dir)s/icon.png
 
 orientation = portrait
 fullscreen = 1

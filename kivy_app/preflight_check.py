@@ -82,30 +82,30 @@ def main():
         warn(False, "未找到 workflow 文件，跳过版本交叉检查")
 
     # ============================================================
-    # 2. SCREEN STRUCTURE — 核心布局检查
+    # 2. ARCHITECTURE CHECK — v10.8+ uses direct BoxLayout pages
     # ============================================================
-    print("\n[2] Screen 布局结构检查")
+    print("\n[2] 架构检查")
 
-    # Rule: Screen children should NOT be added directly without a wrapper
-    # Bad:  self.add_widget(SmokeLayer()); self.add_widget(root)
-    # Good: wrapper = FloatLayout(); wrapper.add_widget(root); self.add_widget(wrapper)
+    # v10.8: Should NOT use ScreenManager/Screen (causes RelativeLayout issues)
+    has_screen_import = bool(re.search(r"^\s*from kivy\.uix\.screenmanager import", main_py, re.M))
+    check(not has_screen_import,
+          "不使用 ScreenManager/Screen (v10.8 改为直接 BoxLayout 页面切换)")
 
-    # Count self.add_widget calls inside Screen classes
-    screen_classes = re.findall(
-        r"class\s+(\w+)\(Screen\):.*?(?=\nclass\s|\Z)", main_py, re.S
-    )
-    for block_match in re.finditer(
-        r"class\s+(\w+)\(Screen\):.*?(?=\nclass\s|\Z)", main_py, re.S
-    ):
-        cls_name = block_match.group(1)
-        block = block_match.group(0)
-        # Count direct self.add_widget() calls in _build method
-        build_match = re.search(r"def _build\(self\):(.*?)(?=\n    def |\Z)", block, re.S)
-        if build_match:
-            build_body = build_match.group(1)
-            direct_adds = re.findall(r"self\.add_widget\(", build_body)
-            check(len(direct_adds) <= 1,
-                  f"{cls_name}._build() 中 self.add_widget 只调用1次 (实际: {len(direct_adds)}次)")
+    # Pages should inherit BoxLayout directly
+    for cls_name in ["MainPage", "ResultPage"]:
+        pattern = rf"class\s+{cls_name}\(BoxLayout\):"
+        found = bool(re.search(pattern, main_py))
+        check(found, f"{cls_name} 继承自 BoxLayout")
+
+    # App.build should return a simple widget (FloatLayout or BoxLayout)
+    build_match = re.search(r"class\s+TianJiApp.*?def build\(self\):(.*?)(?=\n    def |\Z)", main_py, re.S)
+    if build_match:
+        build_body = build_match.group(1)
+        has_screen_mgr = "ScreenManager" in build_body
+        check(not has_screen_mgr, "App.build() 不使用 ScreenManager")
+
+    # fullscreen should be 1 (to avoid Kivy Window size bug on Android)
+    check("fullscreen = 1" in spec, "全屏模式 (fullscreen = 1) 避免 Window 尺寸 bug")
 
     # ============================================================
     # 3. SIZE_HINT 检查 — 关键 Widget 必须显式设置
@@ -212,13 +212,12 @@ def main():
     # ============================================================
     print("\n[7] Android 兼容性检查")
 
-    check("fullscreen = 0" in spec, "非全屏模式 (fullscreen = 0)")
+    check("fullscreen = 1" in spec, "全屏模式 (fullscreen = 1) — 避免 Window 尺寸 bug")
     check("orientation = portrait" in spec, "竖屏模式 (portrait)")
 
-    # Check for FloatLayout wrapper pattern
-    has_floatlayout_import = "FloatLayout" in main_py
-    warn(has_floatlayout_import,
-         "使用了 FloatLayout 包装 Screen 子 widget")
+    # v10.8: should use direct BoxLayout pages, not Screen
+    has_no_screen = "ScreenManager" not in main_py or "# ScreenManager removed" in main_py
+    check(has_no_screen, "不使用 ScreenManager (v10.8 架构)")
 
     # ============================================================
     # SUMMARY

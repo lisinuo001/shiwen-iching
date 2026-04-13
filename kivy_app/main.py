@@ -5,7 +5,7 @@ Design Spec: DESIGN_SPEC.md v1.0 (frozen 2026-04-10)
 """
 import random, os, sys, math, time
 from kivy.app import App
-from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
+# ScreenManager removed in v10.8 — direct BoxLayout page switching
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
@@ -511,102 +511,91 @@ class HexagramDisplay(Widget):
             col = GOLD[:3] if bit else CYAN[:3]
             draw_yao_line(self.canvas, ix, cy2, iw, bit, col, lw)
 
-# ========== MAIN SCREEN (v10.0) ==========
-class MainScreen(Screen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
+# ========== MAIN PAGE (v10.8 - no Screen/ScreenManager) ==========
+class MainPage(BoxLayout):
+    """Main divination page. Direct BoxLayout — no Screen/RelativeLayout."""
+    def __init__(self, app_ref, **kw):
+        super().__init__(orientation='vertical', **kw)
+        self._app = app_ref
         self._bits = []; self._casting = False
+        self._smoke = SmokeLayer()
         self._build()
 
     def _build(self):
-        from kivy.uix.floatlayout import FloatLayout
-
-        # Use a FloatLayout as the single child of Screen to avoid
-        # RelativeLayout quirks on Android
-        wrapper = FloatLayout(size_hint=(1, 1))
-
-        # Spacing spec: padding=16 all sides, element gap=8, button gap=10
         PAD = dp(16)
         GAP = dp(8)
-        root = BoxLayout(orientation='vertical', spacing=GAP,
-                         padding=[PAD, PAD, PAD, PAD],
-                         size_hint=(1, 1), pos_hint={'x': 0, 'y': 0})
-        with root.canvas.before:
-            Color(*BG); self._bg = Rectangle(pos=root.pos, size=root.size)
-        root.bind(pos=lambda w,*_: setattr(self._bg,'pos',w.pos),
-                  size=lambda w,*_: setattr(self._bg,'size',w.size))
+        self.spacing = GAP
+        self.padding = [PAD, PAD, PAD, PAD]
+
+        # ---- Debug banner (will show Window size on Android) ----
+        self._dbg = Label(
+            text="", markup=True, font_name=CN, font_size=sp(9),
+            size_hint=(1, None), height=dp(14), halign='left', valign='middle',
+            color=[0.4, 0.4, 0.5, 0.6])
+        self._dbg.bind(size=lambda w,s: setattr(w,'text_size',s))
+        self.add_widget(self._dbg)
+        Clock.schedule_once(self._update_dbg, 0.5)
 
         # ---- Top bar: compact header row ----
         top_bar = BoxLayout(size_hint=(1, None), height=dp(36), spacing=dp(6))
-        # Title left
         t1 = Label(text="[b]\u5929\u673a[/b]", markup=True, font_name=CN,
             font_size=sp(24), color=WHITE, halign='left', valign='middle')
         t1.bind(size=lambda w,s: setattr(w,'text_size',s))
         top_bar.add_widget(t1)
-        # Subtitle
         t2 = Label(text="[color=#66708a]TIANJI CONSOLE[/color]", markup=True,
             font_name=CN, font_size=sp(10), halign='left', valign='middle',
             size_hint_x=None, width=dp(100))
         t2.bind(size=lambda w,s: setattr(w,'text_size',s))
         top_bar.add_widget(t2)
-        # Status right
         self._status = Label(
             text="[color=#4deb66]\u25cf[/color] [color=#66708a]READY[/color]",
             markup=True, font_name=CN, font_size=sp(11),
             size_hint_x=None, width=dp(60), halign='right', valign='middle')
         self._status.bind(size=lambda w,s: setattr(w,'text_size',s))
         top_bar.add_widget(self._status)
-        root.add_widget(top_bar)
+        self.add_widget(top_bar)
 
-        # ---- Terminal + log line ----
+        # ---- Log line ----
         self._log = Label(
             text=f"[color=#00def2]TIANJI_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]",
             markup=True, font_name=CN, font_size=sp(11),
             size_hint=(1, None), height=dp(18), halign='left', valign='middle')
         self._log.bind(size=lambda w,s: setattr(w,'text_size',s))
-        root.add_widget(self._log)
+        self.add_widget(self._log)
 
-        # ---- 6 yao slots: fill remaining vertical space equally ----
+        # ---- 6 yao slots ----
         slot_box = BoxLayout(orientation='vertical', spacing=dp(6),
                              size_hint=(1, 1))
         self._slots = [None]*6
         for i in range(5, -1, -1):
             s = YaoSlot(i)
-            s.size_hint = (1, 1)  # equal share of space, full width
+            s.size_hint = (1, 1)
             self._slots[i] = s
             slot_box.add_widget(s)
-        root.add_widget(slot_box)
+        self.add_widget(slot_box)
 
-        # ---- Bottom buttons with proper spacing ----
-        btn_spacer = dp(10)
-        root.add_widget(Widget(size_hint_y=None, height=btn_spacer))
-
+        # ---- Buttons ----
+        self.add_widget(Widget(size_hint_y=None, height=dp(10)))
         self._hold_btn = HoldButton(on_complete=self._on_done)
         self._hold_btn.size_hint_x = 1
-        root.add_widget(self._hold_btn)
-
-        root.add_widget(Widget(size_hint_y=None, height=btn_spacer))
-
+        self.add_widget(self._hold_btn)
+        self.add_widget(Widget(size_hint_y=None, height=dp(10)))
         rst = TapButton("\u91cd\u7f6e", "RESET", col=DIM, height=dp(40), on_press=self._reset)
         rst.size_hint_x = 1
-        root.add_widget(rst)
+        self.add_widget(rst)
 
-        wrapper.add_widget(root)
-
-        # Smoke overlay on top of everything
-        self._smoke = SmokeLayer()
-        wrapper.add_widget(self._smoke)
-
-        self.add_widget(wrapper)
+    def _update_dbg(self, *_):
+        w, h = Window.width, Window.height
+        from kivy.metrics import Metrics
+        d = Metrics.density
+        self._dbg.text = f"v10.8 | Win {w}x{h} | density={d:.1f} | dp100={dp(100):.0f}"
 
     def _on_done(self):
-        """One press generates all 6 yao, revealed sequentially."""
         if self._casting: return
         self._casting = True
         self._bits = [random.choice([True, False]) for _ in range(6)]
         for i in range(6):
-            delay = i * 0.28
-            Clock.schedule_once(lambda dt, ii=i: self._reveal_one(ii), delay)
+            Clock.schedule_once(lambda dt, ii=i: self._reveal_one(ii), i * 0.28)
         Clock.schedule_once(lambda dt: self._go_result(), 6*0.28 + 0.6)
 
     def _reveal_one(self, idx):
@@ -622,9 +611,7 @@ class MainScreen(Screen):
 
     def _go_result(self):
         self._casting = False
-        self.manager.get_screen("result").show(self._bits)
-        self.manager.transition = SlideTransition(direction="left")
-        self.manager.current = "result"
+        self._app.show_result(self._bits)
 
     def _reset(self):
         self._bits = []; self._casting = False
@@ -634,32 +621,25 @@ class MainScreen(Screen):
         self._status.text = "[color=#4deb66]\u25cf[/color] [color=#66708a]READY[/color]"
         self._log.text = f"[color=#00def2]TIANJI_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]"
 
-# ========== RESULT SCREEN (v10.0) ==========
-class ResultScreen(Screen):
-    def __init__(self, **kw):
-        super().__init__(**kw); self._build()
+# ========== RESULT PAGE (v10.8 - no Screen/ScreenManager) ==========
+class ResultPage(BoxLayout):
+    """Result display page. Direct BoxLayout."""
+    def __init__(self, app_ref, **kw):
+        super().__init__(orientation='vertical', **kw)
+        self._app = app_ref
+        self.padding = [dp(20), dp(10), dp(20), dp(10)]
+        self.spacing = dp(6)
+        self._build()
 
     def _build(self):
-        from kivy.uix.floatlayout import FloatLayout
-        wrapper = FloatLayout(size_hint=(1, 1))
-
-        root = BoxLayout(orientation='vertical',
-                         padding=[dp(20), dp(10), dp(20), dp(10)], spacing=dp(6),
-                         size_hint=(1, 1), pos_hint={'x': 0, 'y': 0})
-        with root.canvas.before:
-            Color(*BG); self._bg = Rectangle(pos=root.pos, size=root.size)
-        root.bind(pos=lambda w,*_: setattr(self._bg,'pos',w.pos),
-                  size=lambda w,*_: setattr(self._bg,'size',w.size))
-
-        # Hero (#11): hex display left + info right, SAME HEIGHT
+        # Hero
         HERO_H = dp(160)
-        hero = BoxLayout(size_hint_y=None, height=HERO_H, spacing=dp(12))
+        hero = BoxLayout(size_hint=(1, None), height=HERO_H, spacing=dp(12))
         self._hex_w = HexagramDisplay()
         self._hex_w.size_hint = (None, 1)
         self._hex_w.width = dp(90)
         hero.add_widget(self._hex_w)
 
-        # Info column: name biggest > gushi > seq+trig smallest
         info = BoxLayout(orientation='vertical', spacing=dp(2))
         self._name = Label(text="", font_name=CN, font_size=sp(38), markup=True,
             bold=True, halign='left', valign='middle', size_hint_y=0.38)
@@ -678,26 +658,23 @@ class ResultScreen(Screen):
         self._trig.bind(size=lambda w,s: setattr(w,'text_size',s))
         info.add_widget(self._trig)
         hero.add_widget(info)
-        root.add_widget(hero)
+        self.add_widget(hero)
 
         # Scroll
-        sv = ScrollView(do_scroll_x=False)
+        sv = ScrollView(do_scroll_x=False, size_hint=(1, 1))
         inner = BoxLayout(orientation='vertical', size_hint_y=None,
                           spacing=dp(8), padding=[0, dp(4), 0, dp(4)])
         inner.bind(minimum_height=inner.setter('height'))
         self._inner = inner
 
-        # Section: meaning (#7 bigger text)
         inner.add_widget(self._sec_hdr("\u5366\u8c61\u542b\u4e49", CYAN))
         self._desc = self._clbl(sp(16))
         inner.add_widget(self._desc)
 
-        # Section: baihua (#7 bigger text)
         inner.add_widget(self._sec_hdr("\u767d\u8bdd\u89e3\u8bfb", GREEN))
         self._bh = self._clbl(sp(16))
         inner.add_widget(self._bh)
 
-        # Section: yao details (#9 smaller text)
         inner.add_widget(self._sec_hdr("\u516d\u723b\u8be6\u89e3", PURP))
         self._yao = []
         for i in range(6):
@@ -714,14 +691,12 @@ class ResultScreen(Screen):
             size_hint_y=None, height=dp(24), halign='center', valign='middle'))
 
         sv.add_widget(inner)
-        root.add_widget(sv)
+        self.add_widget(sv)
 
-        btn = TapButton("\u91cd\u65b0\u8d77\u5366", "NEW DIVINATION", col=PINK, height=dp(46), on_press=self._back)
+        btn = TapButton("\u91cd\u65b0\u8d77\u5366", "NEW DIVINATION", col=PINK, height=dp(46),
+                        on_press=lambda: self._app.show_main())
         btn.size_hint_x = 1
-        root.add_widget(btn)
-
-        wrapper.add_widget(root)
-        self.add_widget(wrapper)
+        self.add_widget(btn)
 
     def _sec_hdr(self, text, col):
         w = Widget(size_hint_y=None, height=dp(30))
@@ -744,11 +719,6 @@ class ResultScreen(Screen):
         lbl.bind(size=lambda w,s: setattr(w,'text_size',(s[0],None)))
         lbl.bind(texture_size=lbl.setter('size'))
         return lbl
-
-    def _back(self):
-        self.manager.get_screen("main")._reset()
-        self.manager.transition = SlideTransition(direction="right")
-        self.manager.current = "main"
 
     def show(self, bits):
         il = tuple(1 if v else 0 for v in bits)
@@ -788,15 +758,34 @@ class ResultScreen(Screen):
             h.text = f"[color=#9e66fa]{YN[i]}[/color]  [color={c}][{v}] {t}[/color]"
             b.text = f"[color=#ffd633]{yc}[/color]\n[color=#8a92a4]{yb}[/color]"
 
-# ---- App ----
+# ---- App (v10.8 - direct BoxLayout page switching, no ScreenManager) ----
 class TianJiApp(App):
     def build(self):
         for d in [os.path.dirname(os.path.abspath(__file__)), os.getcwd()]:
             if d: resource_add_path(d)
-        sm = ScreenManager()
-        sm.add_widget(MainScreen(name="main"))
-        sm.add_widget(ResultScreen(name="result"))
-        return sm
+
+        from kivy.uix.floatlayout import FloatLayout
+        self._root = FloatLayout()
+
+        self._main_page = MainPage(app_ref=self, size_hint=(1, 1))
+        self._result_page = ResultPage(app_ref=self, size_hint=(1, 1))
+
+        self._root.add_widget(self._main_page)
+        self._current = 'main'
+        return self._root
+
+    def show_result(self, bits):
+        self._result_page.show(bits)
+        self._root.clear_widgets()
+        self._root.add_widget(self._result_page)
+        self._current = 'result'
+
+    def show_main(self):
+        self._main_page._reset()
+        self._root.clear_widgets()
+        self._root.add_widget(self._main_page)
+        self._current = 'main'
+
     def get_application_name(self):
         return "\u5929\u673a"
 

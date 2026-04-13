@@ -54,6 +54,13 @@ jobs:
           cp iching_data.py kivy_app/
           cp yaoci_data.py kivy_app/
 
+      - name: Pre-flight Check (质检卡关)
+        working-directory: kivy_app
+        run: |
+          echo "Running pre-flight checks before build..."
+          python preflight_check.py
+          echo "Pre-flight check passed!"
+
       - name: Clean previous build
         working-directory: kivy_app
         run: |

@@ -341,7 +341,8 @@ d:\snow\iching\
     └── docs\
         ├── UI_KNOWLEDGE.md             ← 项目知识库
         ├── CHECKLIST.md                ← UI 检查清单
-        └── BUILD_SPEC.md              ← 本文档
+        ├── BUILD_SPEC.md              ← 出包规范 (本文档)
+        └── MOBILE_COMPAT_SPEC.md      ← Kivy 移动端适配规范
 ```
 
 ---

@@ -162,7 +162,14 @@ git push origin main
 **原因**: 锁定的版本与当前 python-for-android 不兼容  
 **解决**: `requirements` 中写 `kivy`（不锁版本），让 Buildozer 自动选择兼容版本
 
-### 5.6 APK Artifact 路径错误
+### 5.6 Buildozer 缓存导致旧版本 APK（严重）
+
+**现象**: APK artifact 名称是 v10.5，但内部文件名是 `tianji-10.3.0`，安装后 UI 是旧版  
+**原因**: GitHub Actions 的 `.buildozer` 目录缓存了上次编译的产物，`buildozer android debug` 检测到已有编译结果就直接复用  
+**解决**: 在 Build 步骤前加 `rm -rf .buildozer bin` 强制全量重编  
+**教训**: 每次出包必须确认 APK 文件名中的版本号与 `buildozer.spec` 一致
+
+### 5.7 APK Artifact 路径错误
 
 **现象**: 构建成功但下载不到 APK  
 **原因**: `upload-artifact` 的 `path` 相对于仓库根目录，而 `bin/` 在 `kivy_app/` 下  

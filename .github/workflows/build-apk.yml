@@ -49,6 +49,12 @@ jobs:
           cp iching_data.py kivy_app/
           cp yaoci_data.py kivy_app/
 
+      - name: Clean previous build
+        working-directory: kivy_app
+        run: |
+          rm -rf .buildozer bin
+          echo "Cleaned .buildozer and bin directories"
+
       - name: Build APK
         working-directory: kivy_app
         env:
@@ -56,12 +62,11 @@ jobs:
         run: |
           buildozer -v android debug
 
-      - name: List bin directory
+      - name: Verify APK version
         run: |
-          echo "=== kivy_app/bin contents ==="
-          ls -la kivy_app/bin/ || echo "bin directory not found"
-          echo "=== searching for APK ==="
-          find . -name "*.apk" -type f || echo "no APK found"
+          echo "=== APK files ==="
+          find . -name "*.apk" -type f -exec ls -la {} \;
+          echo "=== Expected version: 10.5.0 ==="
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

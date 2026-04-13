@@ -237,39 +237,45 @@ def draw_led_digit(canvas, digit, cx, cy, dw, dh, col, lw=None):
                 Color(r, g, b, 0.06)
                 Line(points=[seg_pts[i][0], seg_pts[i][1], seg_pts[i][2], seg_pts[i][3]], width=lw*0.6, cap='square')
 
-# ---- YaoSlot: one row showing 0/1 + yao line (native Labels) ----
-class YaoSlot(BoxLayout):
-    """A single yao display row using native Labels for mobile compat."""
+# ---- YaoSlot: one row showing 0/1 + yao line (Widget + child Labels) ----
+class YaoSlot(Widget):
+    """A single yao display row. Widget base with manually positioned child Labels."""
     def __init__(self, idx, **kw):
-        super().__init__(orientation='horizontal', **kw)
+        super().__init__(**kw)
         self.idx = idx
         self.state = 'empty'
         self._val = None
-        self.spacing = dp(4)
-        self.padding = [dp(6), 0]
-        # name label
+        # child labels
         self._lbl_name = Label(text=YN[idx], font_name=CN, font_size=sp(12),
-            color=(*DIM[:3], 0.30), halign='center', valign='middle',
-            size_hint_x=None, width=dp(36))
+            color=(*DIM[:3], 0.30), halign='center', valign='middle')
         self._lbl_name.bind(size=lambda w, s: setattr(w, 'text_size', s))
         self.add_widget(self._lbl_name)
-        # digit label (LED style via monospace look)
         self._lbl_digit = Label(text="-", font_name=CN, font_size=sp(26),
-            color=(*DIM[:3], 0.15), bold=True, halign='center', valign='middle',
-            size_hint_x=None, width=dp(40))
+            color=(*DIM[:3], 0.15), bold=True, halign='center', valign='middle')
         self._lbl_digit.bind(size=lambda w, s: setattr(w, 'text_size', s))
         self.add_widget(self._lbl_digit)
-        # yao line widget (canvas drawn, relative coords are fine for small widget)
-        self._yao_w = Widget(size_hint_x=1)
-        self._yao_w.bind(pos=self._draw_yao, size=self._draw_yao)
-        self.add_widget(self._yao_w)
-        # type label
         self._lbl_type = Label(text="", font_name=CN, font_size=sp(11),
-            color=(*DIM[:3], 0.30), halign='center', valign='middle',
-            size_hint_x=None, width=dp(36))
+            color=(*DIM[:3], 0.30), halign='center', valign='middle')
         self._lbl_type.bind(size=lambda w, s: setattr(w, 'text_size', s))
         self.add_widget(self._lbl_type)
-        self.bind(pos=self._draw_bg, size=self._draw_bg)
+        self.bind(pos=self._layout, size=self._layout)
+        Clock.schedule_once(lambda dt: self._layout(), 0)
+
+    def _layout(self, *_):
+        x, y, w, h = self.x, self.y, self.width, self.height
+        # name: left 10%
+        nw = dp(36)
+        self._lbl_name.pos = (x, y)
+        self._lbl_name.size = (nw, h)
+        # digit: next 15%
+        dw = dp(44)
+        self._lbl_digit.pos = (x + nw, y)
+        self._lbl_digit.size = (dw, h)
+        # type: right 12%
+        tw = dp(40)
+        self._lbl_type.pos = (x + w - tw, y)
+        self._lbl_type.size = (tw, h)
+        self._draw()
 
     def reveal(self, is_yang):
         self._val = is_yang
@@ -282,8 +288,7 @@ class YaoSlot(BoxLayout):
         typ = "\u9633" if is_yang else "\u9634"
         self._lbl_type.text = typ + "\u723B"
         self._lbl_type.color = (*col[:3], 0.55)
-        self._draw_bg()
-        self._draw_yao()
+        self._draw()
 
     def reset(self):
         self.state = 'empty'
@@ -293,11 +298,11 @@ class YaoSlot(BoxLayout):
         self._lbl_digit.color = (*DIM[:3], 0.15)
         self._lbl_digit.font_size = sp(26)
         self._lbl_type.text = ""
-        self._draw_bg()
-        self._draw_yao()
+        self._draw()
 
-    def _draw_bg(self, *_):
+    def _draw(self, *_):
         self.canvas.before.clear()
+        self.canvas.after.clear()
         x, y, w, h = self.x, self.y, self.width, self.height
         if w < 4 or h < 4:
             return
@@ -309,46 +314,50 @@ class YaoSlot(BoxLayout):
                 bg_c = [0.14, 0.12, 0.04] if self._val else [0.04, 0.10, 0.14]
                 Color(*bg_c, 0.5)
                 Rectangle(pos=(x, y + dp(1)), size=(w, h - dp(2)))
-
-    def _draw_yao(self, *_):
-        self._yao_w.canvas.clear()
-        if self.state != 'revealed' or self._val is None:
-            return
-        x, y, w, h = self._yao_w.x, self._yao_w.y, self._yao_w.width, self._yao_w.height
-        if w < 4 or h < 4:
-            return
-        col = GOLD[:3] if self._val else CYAN[:3]
-        draw_yao_line(self._yao_w.canvas, x + dp(4), y + h/2, w - dp(8), self._val, col, dp(2.5))
+        # draw yao line in canvas.after (on top of labels)
+        if self.state == 'revealed' and self._val is not None:
+            nw = dp(36)
+            dw = dp(44)
+            tw = dp(40)
+            lx = x + nw + dw + dp(4)
+            lw = w - nw - dw - tw - dp(8)
+            if lw > dp(10):
+                col = GOLD[:3] if self._val else CYAN[:3]
+                draw_yao_line(self.canvas.after, lx, y + h/2, lw, self._val, col, dp(2.5))
 
 # ---- HoldButton with idle glow effect (#5) ----
-class HoldButton(BoxLayout):
+class HoldButton(Widget):
     HOLD = 1.5
     def __init__(self, on_complete=None, **kw):
-        super().__init__(orientation='vertical', **kw)
+        super().__init__(**kw)
         self._cb = on_complete
         self._hold = False; self._prog = 0; self._done = False; self._ev = None
         self._phase = 0
         self.size_hint_y = None; self.height = dp(72)
-        self.padding = [dp(8), dp(4)]
-        # text labels (native Label, disabled touch so parent gets events)
+        # Overlaid native labels for text
         self._lbl_cn = Label(text="\u6309\u4f4f \u00b7 \u611f\u5e94\u5929\u673a", font_name=CN,
-            font_size=sp(20), color=WHITE, bold=True, halign='center', valign='middle',
-            size_hint_y=0.6, markup=True)
+            font_size=sp(20), color=WHITE, bold=True, halign='center', valign='bottom',
+            markup=True)
         self._lbl_cn.bind(size=lambda w,s: setattr(w,'text_size',s))
         self._lbl_en = Label(text="HOLD 1.5s", font_name=CN,
-            font_size=sp(11), color=(*PINK[:3], 0.45), halign='center', valign='middle',
-            size_hint_y=0.4, markup=True)
+            font_size=sp(11), color=(*PINK[:3], 0.45), halign='center', valign='top',
+            markup=True)
         self._lbl_en.bind(size=lambda w,s: setattr(w,'text_size',s))
-        # Disable touch on labels so HoldButton receives touch events
-        self._lbl_cn.on_touch_down = lambda t: False
-        self._lbl_cn.on_touch_up = lambda t: False
-        self._lbl_en.on_touch_down = lambda t: False
-        self._lbl_en.on_touch_up = lambda t: False
         self.add_widget(self._lbl_cn)
         self.add_widget(self._lbl_en)
         self._idle_ev = Clock.schedule_interval(self._idle_tick, 0.030)
-        self.bind(pos=self._draw_bg, size=self._draw_bg)
-        Clock.schedule_once(lambda dt: self._draw_bg(), 0)
+        self.bind(pos=self._layout, size=self._layout)
+        Clock.schedule_once(lambda dt: self._layout(), 0)
+
+    def _layout(self, *_):
+        """Position child labels to match this widget's pos/size."""
+        x, y, w, h = self.x, self.y, self.width, self.height
+        mid = y + h / 2
+        self._lbl_cn.pos = (x, mid)
+        self._lbl_cn.size = (w, h / 2)
+        self._lbl_en.pos = (x, y)
+        self._lbl_en.size = (w, h / 2)
+        self._draw_bg()
 
     def _idle_tick(self, dt):
         if not self._hold and not self._done:
@@ -430,31 +439,40 @@ class HoldButton(BoxLayout):
         self._update_labels(); self._draw_bg()
 
 # ---- TapButton: Chinese big English small (#6) ----
-class TapButton(BoxLayout):
+class TapButton(Widget):
     def __init__(self, text_cn, text_en="", col=None, on_press=None, **kw):
         h = kw.pop('height', dp(44))
-        super().__init__(orientation='vertical', **kw)
+        super().__init__(**kw)
         self._col = col or CYAN; self._on_press = on_press; self._pressed = False
+        self._has_en = bool(text_en)
         self.size_hint_y = None; self.height = h
-        self.padding = [dp(6), dp(2)]
-        # native labels
         self._lbl_cn = Label(text=text_cn, font_name=CN, font_size=sp(16),
-            color=(*self._col[:3], 0.90), bold=True, halign='center', valign='middle',
-            size_hint_y=0.6 if text_en else 1.0)
+            color=(*self._col[:3], 0.90), bold=True, halign='center',
+            valign='bottom' if text_en else 'middle')
         self._lbl_cn.bind(size=lambda w,s: setattr(w,'text_size',s))
-        self._lbl_cn.on_touch_down = lambda t: False
-        self._lbl_cn.on_touch_up = lambda t: False
         self.add_widget(self._lbl_cn)
+        self._lbl_en = None
         if text_en:
             self._lbl_en = Label(text=text_en, font_name=CN, font_size=sp(11),
-                color=(*self._col[:3], 0.40), halign='center', valign='middle',
-                size_hint_y=0.4)
+                color=(*self._col[:3], 0.40), halign='center', valign='top')
             self._lbl_en.bind(size=lambda w,s: setattr(w,'text_size',s))
-            self._lbl_en.on_touch_down = lambda t: False
-            self._lbl_en.on_touch_up = lambda t: False
             self.add_widget(self._lbl_en)
-        self.bind(pos=self._redraw, size=self._redraw)
-        Clock.schedule_once(lambda dt: self._redraw(), 0)
+        self.bind(pos=self._layout, size=self._layout)
+        Clock.schedule_once(lambda dt: self._layout(), 0)
+
+    def _layout(self, *_):
+        x, y, w, h = self.x, self.y, self.width, self.height
+        if self._has_en and self._lbl_en:
+            mid = y + h / 2
+            self._lbl_cn.pos = (x, mid)
+            self._lbl_cn.size = (w, h / 2)
+            self._lbl_en.pos = (x, y)
+            self._lbl_en.size = (w, h / 2)
+        else:
+            self._lbl_cn.pos = (x, y)
+            self._lbl_cn.size = (w, h)
+        self._redraw()
+
     def _redraw(self, *_):
         self.canvas.before.clear()
         x, y, w, h = self.x, self.y, self.width, self.height

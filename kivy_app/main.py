@@ -519,21 +519,25 @@ class MainScreen(Screen):
         self._build()
 
     def _build(self):
+        from kivy.uix.floatlayout import FloatLayout
+
+        # Use a FloatLayout as the single child of Screen to avoid
+        # RelativeLayout quirks on Android
+        wrapper = FloatLayout(size_hint=(1, 1))
+
         # Spacing spec: padding=16 all sides, element gap=8, button gap=10
         PAD = dp(16)
         GAP = dp(8)
         root = BoxLayout(orientation='vertical', spacing=GAP,
-                         padding=[PAD, PAD, PAD, PAD])
+                         padding=[PAD, PAD, PAD, PAD],
+                         size_hint=(1, 1), pos_hint={'x': 0, 'y': 0})
         with root.canvas.before:
             Color(*BG); self._bg = Rectangle(pos=root.pos, size=root.size)
         root.bind(pos=lambda w,*_: setattr(self._bg,'pos',w.pos),
                   size=lambda w,*_: setattr(self._bg,'size',w.size))
 
-        self._smoke = SmokeLayer()
-        self.add_widget(self._smoke)
-
         # ---- Top bar: compact header row ----
-        top_bar = BoxLayout(size_hint_y=None, height=dp(36), spacing=dp(6))
+        top_bar = BoxLayout(size_hint=(1, None), height=dp(36), spacing=dp(6))
         # Title left
         t1 = Label(text="[b]\u5929\u673a[/b]", markup=True, font_name=CN,
             font_size=sp(24), color=WHITE, halign='left', valign='middle')
@@ -558,16 +562,17 @@ class MainScreen(Screen):
         self._log = Label(
             text=f"[color=#00def2]TIANJI_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]",
             markup=True, font_name=CN, font_size=sp(11),
-            size_hint_y=None, height=dp(18), halign='left', valign='middle')
+            size_hint=(1, None), height=dp(18), halign='left', valign='middle')
         self._log.bind(size=lambda w,s: setattr(w,'text_size',s))
         root.add_widget(self._log)
 
         # ---- 6 yao slots: fill remaining vertical space equally ----
-        slot_box = BoxLayout(orientation='vertical', spacing=dp(6))
+        slot_box = BoxLayout(orientation='vertical', spacing=dp(6),
+                             size_hint=(1, 1))
         self._slots = [None]*6
         for i in range(5, -1, -1):
             s = YaoSlot(i)
-            s.size_hint_y = 1  # equal share of space
+            s.size_hint = (1, 1)  # equal share of space, full width
             self._slots[i] = s
             slot_box.add_widget(s)
         root.add_widget(slot_box)
@@ -577,13 +582,22 @@ class MainScreen(Screen):
         root.add_widget(Widget(size_hint_y=None, height=btn_spacer))
 
         self._hold_btn = HoldButton(on_complete=self._on_done)
+        self._hold_btn.size_hint_x = 1
         root.add_widget(self._hold_btn)
 
         root.add_widget(Widget(size_hint_y=None, height=btn_spacer))
 
         rst = TapButton("\u91cd\u7f6e", "RESET", col=DIM, height=dp(40), on_press=self._reset)
+        rst.size_hint_x = 1
         root.add_widget(rst)
-        self.add_widget(root)
+
+        wrapper.add_widget(root)
+
+        # Smoke overlay on top of everything
+        self._smoke = SmokeLayer()
+        wrapper.add_widget(self._smoke)
+
+        self.add_widget(wrapper)
 
     def _on_done(self):
         """One press generates all 6 yao, revealed sequentially."""
@@ -626,8 +640,12 @@ class ResultScreen(Screen):
         super().__init__(**kw); self._build()
 
     def _build(self):
+        from kivy.uix.floatlayout import FloatLayout
+        wrapper = FloatLayout(size_hint=(1, 1))
+
         root = BoxLayout(orientation='vertical',
-                         padding=[dp(20), dp(10), dp(20), dp(10)], spacing=dp(6))
+                         padding=[dp(20), dp(10), dp(20), dp(10)], spacing=dp(6),
+                         size_hint=(1, 1), pos_hint={'x': 0, 'y': 0})
         with root.canvas.before:
             Color(*BG); self._bg = Rectangle(pos=root.pos, size=root.size)
         root.bind(pos=lambda w,*_: setattr(self._bg,'pos',w.pos),
@@ -699,8 +717,11 @@ class ResultScreen(Screen):
         root.add_widget(sv)
 
         btn = TapButton("\u91cd\u65b0\u8d77\u5366", "NEW DIVINATION", col=PINK, height=dp(46), on_press=self._back)
+        btn.size_hint_x = 1
         root.add_widget(btn)
-        self.add_widget(root)
+
+        wrapper.add_widget(root)
+        self.add_widget(wrapper)
 
     def _sec_hdr(self, text, col):
         w = Widget(size_hint_y=None, height=dp(30))

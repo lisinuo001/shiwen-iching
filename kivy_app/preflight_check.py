@@ -111,6 +111,8 @@ def main():
 
     icon_path = os.path.join(here, "icon.png")
     check(os.path.exists(icon_path), "icon.png exists")
+    presplash_path = os.path.join(here, "presplash.png")
+    check(os.path.exists(presplash_path), "presplash.png exists")
 
     # 5. DATA REFS
     print("\n[5] Data references")

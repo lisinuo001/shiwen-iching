@@ -1,6 +1,6 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
-TIANJI v10.0 - Cyberpunk HUD Divination Console
+TIANJI v11.0 - Cyberpunk HUD Divination Console
 Design Spec: DESIGN_SPEC.md v1.0 (frozen 2026-04-10)
 """
 import random, os, sys, math, time
@@ -527,21 +527,25 @@ class MainPage(BoxLayout):
         self.spacing = GAP
         self.padding = [PAD, PAD, PAD, PAD]
 
-        # ---- Debug banner (will show Window size on Android) ----
+        # ---- Debug banner (hidden by default, tap title 5x to show) ----
         self._dbg = Label(
             text="", markup=True, font_name=CN, font_size=sp(9),
-            size_hint=(1, None), height=dp(14), halign='left', valign='middle',
-            color=[0.4, 0.4, 0.5, 0.6])
+            size_hint=(1, None), height=dp(0), halign='left', valign='middle',
+            color=[0.4, 0.4, 0.5, 0.6], opacity=0)
         self._dbg.bind(size=lambda w,s: setattr(w,'text_size',s))
         self.add_widget(self._dbg)
-        Clock.schedule_once(self._update_dbg, 0.5)
+        self._dbg_visible = False
+        self._dbg_tap_count = 0
+        self._dbg_tap_time = 0
 
         # ---- Top bar: compact header row ----
         top_bar = BoxLayout(size_hint=(1, None), height=dp(36), spacing=dp(6))
         t1 = Label(text="[b]\u5929\u673a[/b]", markup=True, font_name=CN,
             font_size=sp(24), color=WHITE, halign='left', valign='middle')
         t1.bind(size=lambda w,s: setattr(w,'text_size',s))
+        t1.bind(on_touch_down=self._on_title_tap)
         top_bar.add_widget(t1)
+        self._title_lbl = t1
         t2 = Label(text="[color=#66708a]TIANJI CONSOLE[/color]", markup=True,
             font_name=CN, font_size=sp(10), halign='left', valign='middle',
             size_hint_x=None, width=dp(100))
@@ -584,12 +588,32 @@ class MainPage(BoxLayout):
         rst.size_hint_x = 1
         self.add_widget(rst)
 
+    def _on_title_tap(self, widget, touch):
+        if not widget.collide_point(*touch.pos):
+            return False
+        now = time.time()
+        if now - self._dbg_tap_time > 2.0:
+            self._dbg_tap_count = 0
+        self._dbg_tap_time = now
+        self._dbg_tap_count += 1
+        if self._dbg_tap_count >= 5:
+            self._dbg_visible = not self._dbg_visible
+            self._dbg_tap_count = 0
+            if self._dbg_visible:
+                self._dbg.height = dp(14)
+                self._dbg.opacity = 1
+                self._update_dbg()
+            else:
+                self._dbg.height = dp(0)
+                self._dbg.opacity = 0
+        return False
+
     def _update_dbg(self, *_):
         ww, wh = Window.width, Window.height
         from kivy.metrics import Metrics
         d = Metrics.density
         sw, sh = self.width, self.height
-        self._dbg.text = f"v10.9 | Win {ww}x{wh} | self {sw:.0f}x{sh:.0f} | d={d:.1f}"
+        self._dbg.text = f"v11.0 | Win {ww}x{wh} | self {sw:.0f}x{sh:.0f} | d={d:.1f}"
 
     def _on_done(self):
         if self._casting: return
@@ -622,102 +646,244 @@ class MainPage(BoxLayout):
         self._status.text = "[color=#4deb66]\u25cf[/color] [color=#66708a]READY[/color]"
         self._log.text = f"[color=#00def2]TIANJI_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]"
 
-# ========== RESULT PAGE (v10.8 - no Screen/ScreenManager) ==========
+# ========== CARD WIDGET (v11.0 - chamfered card wrapper) ==========
+class CardBox(BoxLayout):
+    """A chamfered card container that draws its own background."""
+    def __init__(self, accent_col=None, **kw):
+        super().__init__(orientation='vertical', **kw)
+        self._accent = accent_col or CYAN[:3]
+        self.padding = [dp(12), dp(8), dp(12), dp(10)]
+        self.spacing = dp(4)
+        self.size_hint_y = None
+        self.bind(pos=self._draw_bg, size=self._draw_bg)
+        self.bind(minimum_height=self.setter('height'))
+
+    def _draw_bg(self, *_):
+        self.canvas.before.clear()
+        x, y, w, h = self.x, self.y, self.width, self.height
+        if w < 4 or h < 4:
+            return
+        draw_chamfer_box(self.canvas.before, x, y, w, h, self._accent,
+                         cut=dp(8), border_a=0.18, glow_a=0.06,
+                         scanlines=False, band=True)
+
+# ========== COLLAPSIBLE SECTION (v11.0 - tap header to expand/collapse) ==========
+class CollapsibleSection(BoxLayout):
+    """A section with a tappable header that shows/hides its content."""
+    def __init__(self, title, accent_col=None, default_open=False, **kw):
+        super().__init__(orientation='vertical', **kw)
+        self.size_hint_y = None
+        self._accent = accent_col or PURP[:3]
+        self._open = default_open
+        self._title_text = title
+
+        # Header (always visible, tappable)
+        self._hdr = Widget(size_hint_y=None, height=dp(36))
+        self._hdr.bind(pos=self._draw_hdr, size=self._draw_hdr)
+        self._hdr.bind(on_touch_down=self._on_tap)
+        self.add_widget(self._hdr)
+
+        # Content container
+        self._content = BoxLayout(orientation='vertical', size_hint_y=None,
+                                  spacing=dp(4))
+        self._content.bind(minimum_height=self._content.setter('height'))
+        if default_open:
+            self.add_widget(self._content)
+
+        self.bind(minimum_height=self.setter('height'))
+
+    def add_content(self, widget):
+        self._content.add_widget(widget)
+
+    def _draw_hdr(self, *_):
+        w = self._hdr
+        w.canvas.clear()
+        x, y, ww, hh = w.x, w.y, w.width, w.height
+        r, g, b = self._accent[:3]
+        arrow = "\u25bc" if self._open else "\u25b6"
+        with w.canvas:
+            Color(r, g, b, 0.12)
+            Rectangle(pos=(x, y), size=(ww, hh))
+            Color(r, g, b, 0.60)
+            Rectangle(pos=(x, y), size=(dp(3), hh))
+            Color(r, g, b, 0.20)
+            Rectangle(pos=(x, y), size=(ww, dp(1)))
+            Rectangle(pos=(x, y + hh - dp(1)), size=(ww, dp(1)))
+        draw_text(w.canvas, f"{arrow} {self._title_text}", x + dp(12), y + dp(8),
+                  sp(15), [r, g, b, 0.90])
+
+    def _on_tap(self, widget, touch):
+        if not widget.collide_point(*touch.pos):
+            return False
+        self._open = not self._open
+        if self._open:
+            self.add_widget(self._content)
+        else:
+            self.remove_widget(self._content)
+        self._draw_hdr()
+        return True
+
+# ========== WATERMARK LAYER (v11.0) ==========
+class WatermarkLayer(Widget):
+    """Draws a faint 'WADJY' watermark in the background."""
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.bind(pos=self._draw, size=self._draw)
+
+    def _draw(self, *_):
+        self.canvas.clear()
+        x, y, w, h = self.x, self.y, self.width, self.height
+        if w < 20 or h < 20:
+            return
+        # Draw WADJY text repeated diagonally
+        fs = sp(28)
+        step_x = dp(140)
+        step_y = dp(100)
+        col = [0.20, 0.22, 0.30, 0.08]
+        row = 0
+        py = y
+        while py < y + h + step_y:
+            px = x - step_x + (row % 2) * step_x * 0.5
+            while px < x + w + step_x:
+                draw_text(self.canvas, "WADJY", px, py, fs, col)
+                px += step_x
+            py += step_y
+            row += 1
+
+# ========== RESULT PAGE (v11.0 - card-based modular layout) ==========
 class ResultPage(BoxLayout):
-    """Result display page. Direct BoxLayout."""
+    """Result display page with card-based modular layout."""
     def __init__(self, app_ref, **kw):
         super().__init__(orientation='vertical', **kw)
         self._app = app_ref
-        self.padding = [dp(20), dp(10), dp(20), dp(10)]
+        self.padding = [dp(14), dp(8), dp(14), dp(8)]
         self.spacing = dp(6)
         self._build()
 
     def _build(self):
-        # Hero
-        HERO_H = dp(160)
-        hero = BoxLayout(size_hint=(1, None), height=HERO_H, spacing=dp(12))
+        # ---- Watermark (bottom layer) ----
+        self._watermark = WatermarkLayer()
+        self._watermark.size_hint = (1, 1)
+
+        # ---- Top bar with back arrow ----
+        top_bar = BoxLayout(size_hint=(1, None), height=dp(32), spacing=dp(6))
+        self._back_lbl = Label(
+            text="[color=#66708a]\u25c0 \u8fd4\u56de[/color]", markup=True,
+            font_name=CN, font_size=sp(13), halign='left', valign='middle',
+            size_hint_x=None, width=dp(60))
+        self._back_lbl.bind(size=lambda w, s: setattr(w, 'text_size', s))
+        self._back_lbl.bind(on_touch_down=self._on_back_tap)
+        top_bar.add_widget(self._back_lbl)
+        self._result_title = Label(
+            text="[color=#66708a]DIVINATION RESULT[/color]", markup=True,
+            font_name=CN, font_size=sp(11), halign='right', valign='middle')
+        self._result_title.bind(size=lambda w, s: setattr(w, 'text_size', s))
+        top_bar.add_widget(self._result_title)
+        self.add_widget(top_bar)
+
+        # ---- Scroll area for all cards ----
+        sv = ScrollView(do_scroll_x=False, size_hint=(1, 1))
+        self._scroll = sv
+
+        outer = BoxLayout(orientation='vertical', size_hint_y=None,
+                          spacing=dp(10), padding=[0, dp(4), 0, dp(4)])
+        outer.bind(minimum_height=outer.setter('height'))
+        self._outer = outer
+
+        # == CARD 1: Hero (hexagram + name + gushi) ==
+        hero_card = CardBox(accent_col=CYAN[:3])
+        hero_inner = BoxLayout(size_hint_y=None, height=dp(140), spacing=dp(12))
         self._hex_w = HexagramDisplay()
         self._hex_w.size_hint = (None, 1)
-        self._hex_w.width = dp(90)
-        hero.add_widget(self._hex_w)
+        self._hex_w.width = dp(80)
+        hero_inner.add_widget(self._hex_w)
 
-        info = BoxLayout(orientation='vertical', spacing=dp(2))
-        self._name = Label(text="", font_name=CN, font_size=sp(38), markup=True,
-            bold=True, halign='left', valign='middle', size_hint_y=0.38)
-        self._name.bind(size=lambda w,s: setattr(w,'text_size',s))
+        info = BoxLayout(orientation='vertical', spacing=dp(2), size_hint_y=None,
+                         height=dp(140))
+        self._name = Label(text="", font_name=CN, font_size=sp(34), markup=True,
+            bold=True, halign='left', valign='middle', size_hint_y=0.32)
+        self._name.bind(size=lambda w, s: setattr(w, 'text_size', s))
         info.add_widget(self._name)
-        self._gushi = Label(text="", font_name=CN, font_size=sp(15), markup=True,
-            halign='left', valign='top', size_hint_y=0.38)
-        self._gushi.bind(size=lambda w,s: setattr(w,'text_size',s))
+        self._gushi = Label(text="", font_name=CN, font_size=sp(14), markup=True,
+            halign='left', valign='top', size_hint_y=0.36)
+        self._gushi.bind(size=lambda w, s: setattr(w, 'text_size', s))
         info.add_widget(self._gushi)
-        self._seq = Label(text="", font_name=CN, font_size=sp(12), markup=True,
-            halign='left', valign='middle', size_hint_y=0.12)
-        self._seq.bind(size=lambda w,s: setattr(w,'text_size',s))
+        self._seq = Label(text="", font_name=CN, font_size=sp(11), markup=True,
+            halign='left', valign='middle', size_hint_y=0.16)
+        self._seq.bind(size=lambda w, s: setattr(w, 'text_size', s))
         info.add_widget(self._seq)
-        self._trig = Label(text="", font_name=CN, font_size=sp(12), markup=True,
-            halign='left', valign='middle', size_hint_y=0.12)
-        self._trig.bind(size=lambda w,s: setattr(w,'text_size',s))
+        self._trig = Label(text="", font_name=CN, font_size=sp(11), markup=True,
+            halign='left', valign='middle', size_hint_y=0.16)
+        self._trig.bind(size=lambda w, s: setattr(w, 'text_size', s))
         info.add_widget(self._trig)
-        hero.add_widget(info)
-        self.add_widget(hero)
+        hero_inner.add_widget(info)
+        hero_card.add_widget(hero_inner)
+        outer.add_widget(hero_card)
 
-        # Scroll
-        sv = ScrollView(do_scroll_x=False, size_hint=(1, 1))
-        inner = BoxLayout(orientation='vertical', size_hint_y=None,
-                          spacing=dp(8), padding=[0, dp(4), 0, dp(4)])
-        inner.bind(minimum_height=inner.setter('height'))
-        self._inner = inner
+        # == CARD 2: Baihua (vernacular interpretation) - PRIORITY ==
+        bh_card = CardBox(accent_col=GREEN[:3])
+        bh_hdr = Label(
+            text="[color=#4deb66]\u25cf[/color] [b][color=#4deb66]\u767d\u8bdd\u89e3\u8bfb[/color][/b]  [color=#66708a]INTERPRETATION[/color]",
+            markup=True, font_name=CN, font_size=sp(14),
+            size_hint_y=None, height=dp(26), halign='left', valign='middle')
+        bh_hdr.bind(size=lambda w, s: setattr(w, 'text_size', s))
+        bh_card.add_widget(bh_hdr)
+        self._bh = self._clbl(sp(17))
+        bh_card.add_widget(self._bh)
+        outer.add_widget(bh_card)
 
-        inner.add_widget(self._sec_hdr("\u5366\u8c61\u542b\u4e49", CYAN))
-        self._desc = self._clbl(sp(16))
-        inner.add_widget(self._desc)
+        # == CARD 3: Guaxiang (hexagram meaning) ==
+        desc_card = CardBox(accent_col=CYAN[:3])
+        desc_hdr = Label(
+            text="[color=#00def2]\u25cf[/color] [b][color=#00def2]\u5366\u8c61\u542b\u4e49[/color][/b]  [color=#66708a]HEXAGRAM MEANING[/color]",
+            markup=True, font_name=CN, font_size=sp(14),
+            size_hint_y=None, height=dp(26), halign='left', valign='middle')
+        desc_hdr.bind(size=lambda w, s: setattr(w, 'text_size', s))
+        desc_card.add_widget(desc_hdr)
+        self._desc = self._clbl(sp(15))
+        desc_card.add_widget(self._desc)
+        outer.add_widget(desc_card)
 
-        inner.add_widget(self._sec_hdr("\u767d\u8bdd\u89e3\u8bfb", GREEN))
-        self._bh = self._clbl(sp(16))
-        inner.add_widget(self._bh)
-
-        inner.add_widget(self._sec_hdr("\u516d\u723b\u8be6\u89e3", PURP))
+        # == CARD 4: Yao details (collapsible) ==
+        self._yao_section = CollapsibleSection(
+            "\u516d\u723b\u8be6\u89e3  SIX LINES", accent_col=PURP[:3],
+            default_open=False)
         self._yao = []
         for i in range(6):
-            hdr = Label(text="", markup=True, font_name=CN, font_size=sp(13),
+            hdr = Label(text="", markup=True, font_name=CN, font_size=sp(12),
                 bold=True, size_hint_y=None, height=dp(22), halign='left', valign='middle')
-            hdr.bind(size=lambda w,s: setattr(w,'text_size',s))
-            body = self._clbl(sp(13))
+            hdr.bind(size=lambda w, s: setattr(w, 'text_size', s))
+            body = self._clbl(sp(12))
             self._yao.append((hdr, body))
-            inner.add_widget(hdr); inner.add_widget(body)
+            self._yao_section.add_content(hdr)
+            self._yao_section.add_content(body)
+        outer.add_widget(self._yao_section)
 
-        inner.add_widget(Label(
-            text="[color=#66708a]\u6613\u4ee5\u9053\u9634\u9633 \u00b7 \u5366\u8c61\u4ec5\u4f9b\u53c2\u8003[/color]",
-            markup=True, font_name=CN, font_size=sp(11),
+        # == Footer ==
+        outer.add_widget(Label(
+            text="[color=#66708a]\u6613\u4ee5\u9053\u9634\u9633 \u00b7 \u5366\u8c61\u4ec5\u4f9b\u53c2\u8003[/color]  [color=#3a3e4a]WADJY[/color]",
+            markup=True, font_name=CN, font_size=sp(10),
             size_hint_y=None, height=dp(24), halign='center', valign='middle'))
 
-        sv.add_widget(inner)
+        sv.add_widget(outer)
         self.add_widget(sv)
 
+        # ---- Bottom button ----
         btn = TapButton("\u91cd\u65b0\u8d77\u5366", "NEW DIVINATION", col=PINK, height=dp(46),
                         on_press=lambda: self._app.show_main())
         btn.size_hint_x = 1
         self.add_widget(btn)
 
-    def _sec_hdr(self, text, col):
-        w = Widget(size_hint_y=None, height=dp(30))
-        def _d(ww, *_):
-            ww.canvas.clear()
-            x, y, ww2, hh = ww.x, ww.y, ww.width, ww.height
-            r, g, b = col[:3]
-            with ww.canvas:
-                Color(r, g, b, 0.60)
-                Rectangle(pos=(x, y), size=(dp(3), hh))
-                Color(r, g, b, 0.10)
-                Rectangle(pos=(x+dp(8), y+hh/2-dp(0.5)), size=(ww2-dp(8), dp(1)))
-            draw_text(ww.canvas, text, x+dp(12), y+dp(6), sp(16), col)
-        w.bind(pos=_d, size=_d)
-        return w
+    def _on_back_tap(self, widget, touch):
+        if not widget.collide_point(*touch.pos):
+            return False
+        self._app.show_main()
+        return True
 
     def _clbl(self, fs=None):
         lbl = Label(text="", markup=True, font_name=CN, font_size=fs or sp(15),
             color=SOFT, size_hint_y=None, halign='left', valign='top')
-        lbl.bind(size=lambda w,s: setattr(w,'text_size',(s[0],None)))
+        lbl.bind(size=lambda w, s: setattr(w, 'text_size', (s[0], None)))
         lbl.bind(texture_size=lbl.setter('size'))
         return lbl
 
@@ -729,8 +895,11 @@ class ResultPage(BoxLayout):
             return
         seq, name, pos, gushi, desc, baihua = data
         lo, up = il[:3], il[3:]
-        lt = TRIGRAMS.get(lo, ("?","?","?"))
-        ut = TRIGRAMS.get(up, ("?","?","?"))
+        lt = TRIGRAMS.get(lo, ("?", "?", "?"))
+        ut = TRIGRAMS.get(up, ("?", "?", "?"))
+
+        # Reset scroll to top
+        self._scroll.scroll_y = 1.0
 
         self._hex_w.set_bits(il)
         self._name.text = f"[color=#00def2]{name}[/color]"
@@ -740,13 +909,12 @@ class ResultPage(BoxLayout):
 
         self._desc.text = f"[color=#c8d4e0]{desc}[/color]"
 
-        # Clean baihua (#10 remove leading tags)
+        # Clean baihua
         bh_text = baihua
         for prefix in ["\u3010\u767d\u8bdd\u3011", "\u767d\u8bdd\uff1a"]:
             if bh_text.startswith(prefix):
                 bh_text = bh_text[len(prefix):]
         bh_text = bh_text.strip()
-        # Enrich (#8)
         bh_text += "\n\n\u5efa\u8bae\uff1a\u5728\u5f53\u524d\u5f62\u52bf\u4e0b\uff0c\u5e94\u4fdd\u6301\u5185\u5fc3\u5e73\u9759\uff0c\u987a\u5e94\u81ea\u7136\u89c4\u5f8b\uff0c\u4e0d\u5b9c\u8fc7\u4e8e\u6025\u8e81\u3002\u8c28\u614e\u884c\u4e8b\uff0c\u6ce8\u610f\u89c2\u5bdf\u5468\u56f4\u73af\u5883\u7684\u53d8\u5316\uff0c\u628a\u63e1\u65f6\u673a\u65b9\u53ef\u6709\u6240\u4f5c\u4e3a\u3002"
         self._bh.text = f"[color=#4deb66]{bh_text}[/color]"
 
@@ -759,7 +927,7 @@ class ResultPage(BoxLayout):
             h.text = f"[color=#9e66fa]{YN[i]}[/color]  [color={c}][{v}] {t}[/color]"
             b.text = f"[color=#ffd633]{yc}[/color]\n[color=#8a92a4]{yb}[/color]"
 
-# ---- App (v10.9 - simplest possible root) ----
+# ---- App (v11.0 - simplest possible root) ----
 class TianJiApp(App):
     def build(self):
         for d in [os.path.dirname(os.path.abspath(__file__)), os.getcwd()]:

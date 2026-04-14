@@ -18,6 +18,7 @@ test_*.py
 test_*.txt
 test_*.png
 gen_*.py
+!kivy_app/gen_icon.py
 check_*.py
 chk.py
 show_ic.py
@@ -28,7 +29,6 @@ append_helper.py
 _gen.py
 gen_yaoci*.py
 gen_keys.py
-gen_icon.py
 build.bat
 build_log.txt
 setup.iss

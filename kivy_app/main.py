@@ -372,7 +372,7 @@ class HoldButton(Widget):
             self._lbl_en.color = (*GREEN[:3], 0.45)
         elif self._hold:
             pct = int(self._prog * 100)
-            self._lbl_cn.text = f"\u611f\u5e94\u4e2d {pct}%"
+            self._lbl_cn.text = f"\u542f\u52a8CODE {pct}%"
             self._lbl_cn.color = GREEN
             self._lbl_en.text = "CHANNELING"
             self._lbl_en.color = (*GREEN[:3], 0.45)

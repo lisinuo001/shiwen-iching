@@ -14,7 +14,7 @@
 1. MUST clean cache -- workflow must have `rm -rf .buildozer bin`
 2. MUST verify version BEFORE push -- 3 places must match: buildozer.spec / artifact name / expected version (auto-checked by preflight_check.py)
 3. MUST use Widget base -- interactive widgets inherit Widget, NOT BoxLayout
-4. MUST keep config ASCII-only -- buildozer.spec and preflight_check.py: NO Chinese, NO emoji, NO BOM
+4. MUST keep config BOM-free -- buildozer.spec: title allows Chinese (e.g. 易CODE), but NO BOM; preflight_check.py: pure ASCII only
 5. MUST pass preflight before build -- preflight_check.py runs before buildozer, blocks if fail
 6. MUST test on REAL PHONE -- PC Android emulators (MuMu, LDPlayer, BlueStacks) are NOT valid for layout testing
 
@@ -398,7 +398,9 @@ preflight checks: version match, architecture, dangerous patterns, file integrit
 18. ALWAYS include diagnostic label in App showing version, Window size, widget size, density
 19. NEVER use scanlines/stripe overlay on icon — kills clarity on small screens (v11.0)
 20. Icon fish-eyes MUST be opposite color of their half (yin dot in yang, yang dot in yin) (v11.0)
-21. buildozer.spec title field supports Chinese (e.g. `易CODE`), no need for ASCII workaround
+21. App brand naming rule: Chinese context = 「易CODE」, English/technical context = 「YiCODE」
+22. buildozer.spec title MUST be Chinese 「易CODE」(this is the phone home screen name)
+23. When user says "改名成XX", replace ALL user-visible name occurrences, not just one file
 
 ---
 

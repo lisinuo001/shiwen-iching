@@ -1,5 +1,5 @@
 [app]
-title = YiCODE
+title = 易CODE
 package.name = yicode
 package.domain = org.yicode
 

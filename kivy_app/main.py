@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-YiCODE v11.0 - Cyberpunk HUD Divination Console
+易CODE v11.1 - Cyberpunk HUD Divination Console
 Design Spec: DESIGN_SPEC.md v1.0 (frozen 2026-04-10)
 """
 import random, os, sys, math, time
@@ -546,7 +546,7 @@ class MainPage(BoxLayout):
         t1.bind(on_touch_down=self._on_title_tap)
         top_bar.add_widget(t1)
         self._title_lbl = t1
-        t2 = Label(text="[color=#66708a]YiCODE CONSOLE[/color]", markup=True,
+        t2 = Label(text="[color=#66708a]\u6613CODE CONSOLE[/color]", markup=True,
             font_name=CN, font_size=sp(10), halign='left', valign='middle',
             size_hint_x=None, width=dp(100))
         t2.bind(size=lambda w,s: setattr(w,'text_size',s))
@@ -561,7 +561,7 @@ class MainPage(BoxLayout):
 
         # ---- Log line ----
         self._log = Label(
-            text=f"[color=#00def2]YiCODE_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]",
+            text=f"[color=#00def2]\u6613CODE_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]",
             markup=True, font_name=CN, font_size=sp(11),
             size_hint=(1, None), height=dp(18), halign='left', valign='middle')
         self._log.bind(size=lambda w,s: setattr(w,'text_size',s))
@@ -630,7 +630,7 @@ class MainPage(BoxLayout):
         col = "#ffd633" if is_yang else "#00def2"
         typ = "\u9633\u723B" if is_yang else "\u9634\u723B"
         self._status.text = f"[color={col}]\u25cf[/color] [color=#66708a]{idx+1}/6[/color]"
-        self._log.text = f"[color=#00def2]YiCODE_LINK[/color]  [color={col}]{YN[idx]} = {val} ({typ})[/color]"
+        self._log.text = f"[color=#00def2]\u6613CODE_LINK[/color]  [color={col}]{YN[idx]} = {val} ({typ})[/color]"
         self._smoke.burst(self._slots[idx].center_x, self._slots[idx].center_y,
                           GOLD[:3] if is_yang else CYAN[:3])
 
@@ -644,7 +644,7 @@ class MainPage(BoxLayout):
         for s in self._slots:
             if s: s.reset()
         self._status.text = "[color=#4deb66]\u25cf[/color] [color=#66708a]READY[/color]"
-        self._log.text = f"[color=#00def2]YiCODE_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]"
+        self._log.text = f"[color=#00def2]\u6613CODE_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]"
 
 # ========== CARD WIDGET (v11.0 - chamfered card wrapper) ==========
 class CardBox(BoxLayout):

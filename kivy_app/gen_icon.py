@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-YiCORE Icon & Splash Generator v2.0
+易CODE Icon & Splash Generator v2.0
 - Icon: Clean taiji, no scanlines, high contrast, 512x512
 - Splash: Full-screen cyberpunk splash, 1080x1920
 """
@@ -136,7 +136,7 @@ def gen_icon(size=512):
 
     # (No scan lines — removed per design spec, affects clarity)
 
-    # --- "YiCORE" text at bottom ---
+    # --- "易CODE" text at bottom ---
     try:
         font_path = os.path.join(HERE, "NotoSansCJK.otf")
         font_label = ImageFont.truetype(font_path, size // 14)
@@ -151,7 +151,7 @@ def gen_icon(size=512):
             w, h = draw.textsize(text, font=font)
             return w
 
-    txt = "\u6613CORE"
+    txt = "\u6613CODE"
     tw = _tw_icon(txt, font_label)
     text_y = taiji_cy + R + size // 16
     # Text glow
@@ -229,7 +229,7 @@ def gen_splash(width=1080, height=1920):
     draw.line([(width // 6, line_y2), (width * 5 // 6, line_y2)],
               fill=(0, 222, 242, 60), width=1)
 
-    # Title text "易CORE" - large
+    # Title text "易CODE" - large
     title_y = line_y2 + 60
     try:
         font_path = os.path.join(HERE, "NotoSansCJK.otf")
@@ -250,13 +250,13 @@ def gen_splash(width=1080, height=1920):
             w, h = draw.textsize(text, font=font)
             return w
 
-    # "易CORE"
-    tw = _tw("\u6613CORE", font_big)
-    draw.text((cx - tw // 2, title_y), "\u6613CORE",
+    # "易CODE"
+    tw = _tw("\u6613CODE", font_big)
+    draw.text((cx - tw // 2, title_y), "\u6613CODE",
               fill=(0, 222, 242, 240), font=font_big)
 
-    # "YiCORE DIVINATION SYSTEM"
-    sub_text = "YiCORE DIVINATION SYSTEM"
+    # "易CODE DIVINATION SYSTEM"
+    sub_text = "\u6613CODE DIVINATION SYSTEM"
     sw = _tw(sub_text, font_sub)
     draw.text((cx - sw // 2, title_y + 120), sub_text,
               fill=(102, 112, 138, 180), font=font_sub)

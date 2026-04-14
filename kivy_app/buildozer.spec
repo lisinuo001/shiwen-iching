@@ -1,7 +1,7 @@
 [app]
-title = yicore
-package.name = yicore
-package.domain = org.yicore
+title = 易CODE
+package.name = yicode
+package.domain = org.yicode
 
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,otf

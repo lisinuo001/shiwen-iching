@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-YiCORE v11.0 - Cyberpunk HUD Divination Console
+YiCODE v11.0 - Cyberpunk HUD Divination Console
 Design Spec: DESIGN_SPEC.md v1.0 (frozen 2026-04-10)
 """
 import random, os, sys, math, time
@@ -335,7 +335,7 @@ class HoldButton(Widget):
         self._phase = 0
         self.size_hint_y = None; self.height = dp(72)
         # Overlaid native labels for text
-        self._lbl_cn = Label(text="\u6309\u4f4f \u00b7 \u542f\u52a8CORE", font_name=CN,
+        self._lbl_cn = Label(text="\u6309\u4f4f\u00b7\u60f3\u4f60\u6240\u95ee\u4e4b\u4e8b", font_name=CN,
             font_size=sp(20), color=WHITE, bold=True, halign='center', valign='bottom',
             markup=True)
         self._lbl_cn.bind(size=lambda w,s: setattr(w,'text_size',s))
@@ -366,18 +366,18 @@ class HoldButton(Widget):
 
     def _update_labels(self):
         if self._done:
-            self._lbl_cn.text = "CORE \u5df2\u542f\u52a8"
+            self._lbl_cn.text = "\u5366\u8c61\u5df2\u6210"
             self._lbl_cn.color = GREEN
             self._lbl_en.text = "DIVINATION COMPLETE"
             self._lbl_en.color = (*GREEN[:3], 0.45)
         elif self._hold:
             pct = int(self._prog * 100)
-            self._lbl_cn.text = f"\u542f\u52a8CORE {pct}%"
+            self._lbl_cn.text = f"\u611f\u5e94\u4e2d {pct}%"
             self._lbl_cn.color = GREEN
             self._lbl_en.text = "CHANNELING"
             self._lbl_en.color = (*GREEN[:3], 0.45)
         else:
-            self._lbl_cn.text = "\u6309\u4f4f \u00b7 \u542f\u52a8CORE"
+            self._lbl_cn.text = "\u6309\u4f4f\u00b7\u60f3\u4f60\u6240\u95ee\u4e4b\u4e8b"
             self._lbl_cn.color = WHITE
             self._lbl_en.text = "HOLD 1.5s"
             self._lbl_en.color = (*PINK[:3], 0.45)
@@ -540,13 +540,13 @@ class MainPage(BoxLayout):
 
         # ---- Top bar: compact header row ----
         top_bar = BoxLayout(size_hint=(1, None), height=dp(36), spacing=dp(6))
-        t1 = Label(text="[b]\u6613CORE[/b]", markup=True, font_name=CN,
+        t1 = Label(text="[b]\u6613CODE[/b]", markup=True, font_name=CN,
             font_size=sp(24), color=WHITE, halign='left', valign='middle')
         t1.bind(size=lambda w,s: setattr(w,'text_size',s))
         t1.bind(on_touch_down=self._on_title_tap)
         top_bar.add_widget(t1)
         self._title_lbl = t1
-        t2 = Label(text="[color=#66708a]YiCORE CONSOLE[/color]", markup=True,
+        t2 = Label(text="[color=#66708a]YiCODE CONSOLE[/color]", markup=True,
             font_name=CN, font_size=sp(10), halign='left', valign='middle',
             size_hint_x=None, width=dp(100))
         t2.bind(size=lambda w,s: setattr(w,'text_size',s))
@@ -561,7 +561,7 @@ class MainPage(BoxLayout):
 
         # ---- Log line ----
         self._log = Label(
-            text=f"[color=#00def2]YiCORE_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]",
+            text=f"[color=#00def2]YiCODE_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]",
             markup=True, font_name=CN, font_size=sp(11),
             size_hint=(1, None), height=dp(18), halign='left', valign='middle')
         self._log.bind(size=lambda w,s: setattr(w,'text_size',s))
@@ -630,7 +630,7 @@ class MainPage(BoxLayout):
         col = "#ffd633" if is_yang else "#00def2"
         typ = "\u9633\u723B" if is_yang else "\u9634\u723B"
         self._status.text = f"[color={col}]\u25cf[/color] [color=#66708a]{idx+1}/6[/color]"
-        self._log.text = f"[color=#00def2]YiCORE_LINK[/color]  [color={col}]{YN[idx]} = {val} ({typ})[/color]"
+        self._log.text = f"[color=#00def2]YiCODE_LINK[/color]  [color={col}]{YN[idx]} = {val} ({typ})[/color]"
         self._smoke.burst(self._slots[idx].center_x, self._slots[idx].center_y,
                           GOLD[:3] if is_yang else CYAN[:3])
 
@@ -644,7 +644,7 @@ class MainPage(BoxLayout):
         for s in self._slots:
             if s: s.reset()
         self._status.text = "[color=#4deb66]\u25cf[/color] [color=#66708a]READY[/color]"
-        self._log.text = f"[color=#00def2]YiCORE_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]"
+        self._log.text = f"[color=#00def2]YiCODE_LINK {time.strftime('%H:%M')}[/color]  [color=#66708a]\u7b49\u5f85\u8d77\u5366\u6307\u4ee4...[/color]"
 
 # ========== CARD WIDGET (v11.0 - chamfered card wrapper) ==========
 class CardBox(BoxLayout):
@@ -726,16 +726,16 @@ class CollapsibleSection(BoxLayout):
         return True
 
     def _force_scroll_update(self, *_):
-        """Walk up to find ScrollView and reset scroll position if needed."""
+        """Walk up to find ScrollView and force scroll back to top on collapse."""
         p = self.parent
         while p:
             if isinstance(p, ScrollView):
-                # Clamp scroll_y to valid range to prevent blank space
-                p.scroll_y = min(p.scroll_y, 1.0)
-                # Trigger re-layout by touching the inner container
-                if hasattr(p, 'children') and p.children:
-                    inner = p.children[0]
-                    inner.height = inner.height  # force recalc
+                if not self._open:
+                    # Collapsed: force scroll to top to prevent blank space
+                    p.scroll_y = 1.0
+                else:
+                    # Expanded: keep current position but clamp
+                    p.scroll_y = min(p.scroll_y, 1.0)
                 break
             p = p.parent
 

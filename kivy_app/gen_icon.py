@@ -24,14 +24,14 @@ def gen_icon(size=512):
     cx, cy = size // 2, size // 2
     corner_r = size // 5  # rounded corner radius
 
-    # --- Rounded square background with gradient ---
+    # --- Rounded square background: deep blue-purple gradient ---
     for py in range(size):
         for px in range(size):
             d = math.sqrt((px - cx)**2 + (py - cy)**2) / (size * 0.7)
             d = min(d, 1.0)
-            r = int(12 + 10 * (1 - d))
-            g = int(14 + 8 * (1 - d))
-            b = int(22 + 14 * (1 - d))
+            r = int(14 + 12 * (1 - d))   # subtle purple tint
+            g = int(8 + 6 * (1 - d))
+            b = int(28 + 18 * (1 - d))   # blue-purple base
             img.putpixel((px, py), (r, g, b, 255))
 
     # --- Taiji circle ---
@@ -61,54 +61,59 @@ def gen_icon(size=512):
             edge_fade = min(1.0, (R - dist) / max(1, R * 0.04))
 
             if is_yang:
-                # Neon cyan with glow gradient
+                # Neon CYAN-BLUE half (yang) — bright electric blue
                 t = 1 - dist / R
-                br = 0.70 + 0.30 * t
+                br = 0.60 + 0.40 * t
                 img.putpixel((px, py), (
-                    int(0 * br * edge_fade),
-                    int(210 * br * edge_fade),
-                    int(235 * br * edge_fade), 255))
+                    int(20 * br * edge_fade),
+                    int(200 * br * edge_fade),
+                    int(255 * br * edge_fade), 255))
             else:
-                # Deep dark with slight purple tint (more cyber)
+                # MAGENTA-PURPLE half (yin) — neon pink/purple glow
                 t = 1 - dist / R
-                br = 0.12 + 0.18 * t
-                v = int(40 * br * edge_fade)
+                br = 0.55 + 0.45 * t
                 img.putpixel((px, py), (
-                    v + int(8 * br),
-                    v,
-                    v + int(15 * br), 255))
+                    int(200 * br * edge_fade),
+                    int(40 * br * edge_fade),
+                    int(220 * br * edge_fade), 255))
 
-    # --- Fish eyes (CORRECT: opposite color in each half) ---
-    eye_r = int(R * 0.13)
+    # --- Fish eyes (SWAPPED: each eye is the OPPOSITE color of its half) ---
+    # S-curve logic: upper-left = yang(cyan), upper semicircle lobe = yin(purple)
+    # So the center (cx, taiji_cy - hr) is IN the yin lobe (purple area)
+    # And the center (cx, taiji_cy + hr) is IN the yang lobe (cyan area)
+    eye_r = int(R * 0.14)
 
-    # Dark eye in YANG (cyan) half — at (cx, taiji_cy - hr)
-    ey_dark_cx, ey_dark_cy = cx, taiji_cy - hr
-    for px in range(ey_dark_cx - eye_r - 1, ey_dark_cx + eye_r + 2):
-        for py in range(ey_dark_cy - eye_r - 1, ey_dark_cy + eye_r + 2):
+    # Upper dot at (cx, taiji_cy - hr) is in PURPLE(yin) half → draw CYAN dot
+    ey_up_cx, ey_up_cy = cx, taiji_cy - hr
+    for px in range(ey_up_cx - eye_r - 1, ey_up_cx + eye_r + 2):
+        for py in range(ey_up_cy - eye_r - 1, ey_up_cy + eye_r + 2):
             if px < 0 or px >= size or py < 0 or py >= size:
                 continue
-            dx, dy = px - ey_dark_cx, py - ey_dark_cy
+            dx, dy = px - ey_up_cx, py - ey_up_cy
             d = math.sqrt(dx*dx + dy*dy)
             if d <= eye_r:
                 fade = 1 - d / eye_r
-                # Dark purple dot (yin in yang)
-                v = int(18 + 12 * fade)
-                img.putpixel((px, py), (v + 5, v, v + 10, 255))
+                # Bright CYAN dot (yang-color in yin-half)
+                r_val = int(10 + 10 * fade)
+                g_val = int(190 + 40 * fade)
+                b_val = int(245 + 10 * fade)
+                img.putpixel((px, py), (r_val, g_val, b_val, 255))
 
-    # Bright eye in YIN (dark) half — at (cx, taiji_cy + hr)
-    ey_bright_cx, ey_bright_cy = cx, taiji_cy + hr
-    for px in range(ey_bright_cx - eye_r - 1, ey_bright_cx + eye_r + 2):
-        for py in range(ey_bright_cy - eye_r - 1, ey_bright_cy + eye_r + 2):
+    # Lower dot at (cx, taiji_cy + hr) is in CYAN(yang) half → draw PURPLE dot
+    ey_lo_cx, ey_lo_cy = cx, taiji_cy + hr
+    for px in range(ey_lo_cx - eye_r - 1, ey_lo_cx + eye_r + 2):
+        for py in range(ey_lo_cy - eye_r - 1, ey_lo_cy + eye_r + 2):
             if px < 0 or px >= size or py < 0 or py >= size:
                 continue
-            dx, dy = px - ey_bright_cx, py - ey_bright_cy
+            dx, dy = px - ey_lo_cx, py - ey_lo_cy
             d = math.sqrt(dx*dx + dy*dy)
             if d <= eye_r:
                 fade = 1 - d / eye_r
-                # Bright cyan dot (yang in yin)
-                g_val = int(180 + 42 * fade)
-                b_val = int(210 + 32 * fade)
-                img.putpixel((px, py), (0, g_val, b_val, 255))
+                # Bright PURPLE dot (yin-color in yang-half)
+                r_val = int(190 + 50 * fade)
+                g_val = int(30 + 20 * fade)
+                b_val = int(200 + 40 * fade)
+                img.putpixel((px, py), (r_val, g_val, b_val, 255))
 
     # --- Taiji border (neon glow) ---
     for ring_r in range(R + 8, R + 2, -1):
@@ -129,11 +134,7 @@ def gen_icon(size=512):
     draw.line([(p, size - p - m), (p, size - p), (p + m, size - p)], fill=mc, width=mw)
     draw.line([(size - p - m, size - p), (size - p, size - p), (size - p, size - p - m)], fill=mc, width=mw)
 
-    # --- Horizontal scan lines across the taiji (subtle cyber texture) ---
-    for sy in range(taiji_cy - R, taiji_cy + R, 6):
-        if 0 <= sy < size:
-            draw.line([(cx - R, sy), (cx + R, sy)],
-                      fill=(0, 222, 242, 8), width=1)
+    # (No scan lines — removed per design spec, affects clarity)
 
     # --- "YiCORE" text at bottom ---
     try:

@@ -1,9 +1,9 @@
 # 出包规范 BUILD_SPEC
 
-> 版本: v3.0 (总结 v10.0~v10.8 所有打包教训 + 自动 QA 管线)  
+> 版本: v4.0 (v10.0~v10.9 全部教训 + MuMu 模拟器事件 + 测试环境规范)  
 > 更新日期: 2026-04-14  
 > 适用项目: 天机 TianJi (Kivy Android APK)  
-> 状态: 🟢 ACTIVE
+> 状态: ACTIVE
 
 ---
 
@@ -16,6 +16,7 @@
 3. MUST use Widget base -- interactive widgets inherit Widget, NOT BoxLayout
 4. MUST keep config ASCII-only -- buildozer.spec and preflight_check.py: NO Chinese, NO emoji, NO BOM
 5. MUST pass preflight before build -- preflight_check.py runs before buildozer, blocks if fail
+6. MUST test on REAL PHONE -- PC Android emulators (MuMu, LDPlayer, BlueStacks) are NOT valid for layout testing
 
 ---
 
@@ -136,11 +137,15 @@ git push origin main
 1. Workflow run -> Artifacts -> download ZIP
 2. Version consistency is already guaranteed by preflight_check.py (auto-blocks mismatched builds)
 
-### Step 6: Install and test
+### Step 6: Install and test on REAL PHONE
 
-1. Transfer to phone
+1. Transfer to **real Android phone** (NOT emulator!)
 2. Install (enable unknown sources)
 3. Follow Section 7 test checklist
+4. PC Android emulators (MuMu, LDPlayer, BlueStacks) are ONLY for crash/install testing, NOT layout
+
+> WARNING: v10.5~v10.9 wasted 5 builds (150 min) chasing a layout bug that only existed
+> in MuMu emulator. Real phone was correct all along. See Bug B17.
 
 ---
 
@@ -218,6 +223,12 @@ DO NOT change without testing:
 - Symptom: Warning about migration to android.archs
 - Fix: Change `android.arch` to `android.archs`
 
+#### BB. preflight false-positive on ScreenManager check (v10.9)
+- Symptom: preflight reports `[FAIL] App.build() has no ScreenManager` -- but that's correct behavior
+- Cause: Regex-based check for ScreenManager inside build() was unreliable; matched comment text or failed to match method boundary
+- Fix: Removed the regex check; import-level check (line 84) is sufficient
+- Prevention: Keep preflight checks simple; avoid complex regex on code structure
+
 ### P1 -- Phone UI broken
 
 #### B11. CoreLabel canvas coords reset to (0,0) on Android
@@ -235,12 +246,22 @@ DO NOT change without testing:
 - Cause: Layout timing vs canvas draw timing inconsistent on Android
 - Fix: Widget base + bind -> _layout() unified update
 
-#### B14. Screen(RelativeLayout) causes half-screen layout (v10.5~v10.7)
-- Versions: v10.5~v10.7, 3 versions unfixed
-- Symptom: All UI ~40% width, left side only, huge blank space above
-- Cause: Screen=RelativeLayout size_hint bug + fullscreen=0 Window size bug
-- Failed attempts: FloatLayout wrapper, explicit size_hint, extra size_hint_x -- all no effect
-- Correct fix: Remove ScreenManager entirely, BoxLayout pages, fullscreen=1
+#### B14. Screen(RelativeLayout) layout issues (v10.5~v10.7)
+- Versions: v10.5~v10.7
+- Symptom: All UI ~40% width on MuMu emulator
+- Original diagnosis: Screen=RelativeLayout size_hint bug + fullscreen=0 Window size bug
+- **REVISED (v10.9)**: This was partly a real issue (ScreenManager removal + fullscreen=1 are genuine improvements) but the "40% width" symptom was **caused by MuMu emulator DPI incompatibility**, not code. Real phone was always correct from v10.5 onward.
+- Lesson: Always verify on real device before assuming code is wrong
+
+#### B17. MuMu emulator DPI incompatibility (v10.5~v10.9) -- CRITICAL LESSON
+- Versions: v10.5~v10.9, 5 consecutive builds wasted
+- Symptom: UI only fills ~40% of screen width on MuMu emulator
+- Debug data: `Win 390x844 | self 390x844 | d=1.4` -- Widget size == Window size, code is correct
+- Cause: MuMu's DPI scaling and Kivy SDL2 window initialization are incompatible. Kivy gets correct logical size (390x844) but MuMu renders to physical resolution (1080x1920), so 390px only fills part of the screen
+- Real phone behavior: **Completely normal, full-width layout**
+- Fix: None needed for code. Use real phone for testing.
+- Cost: 5 versions x 30 min build = 150 minutes wasted + unnecessary code changes
+- Prevention: NEVER use PC Android emulators for Kivy layout verification
 
 ### P2 -- Build details
 
@@ -259,11 +280,11 @@ DO NOT change without testing:
 - Text via add_widget(Label) + bind(pos, size) + _layout()
 - on_touch_down directly on Widget, not through BoxLayout children
 
-### 6.2 Page Architecture (v10.8)
+### 6.2 Page Architecture (v10.9)
 - Pages inherit BoxLayout directly (NOT Screen)
-- App.build() returns FloatLayout
-- Page switching via clear_widgets() + add_widget()
-- NO ScreenManager
+- App.build() returns MainPage(BoxLayout) directly -- no FloatLayout wrapper
+- Page switching via root_window.remove_widget() + root_window.add_widget()
+- NO ScreenManager, NO FloatLayout intermediate layer
 
 ### 6.3 Coordinate Rules
 - Widget.canvas + bind: OK on both PC and Android
@@ -332,7 +353,8 @@ d:\snow\iching\
 | 10.5.0 | 04-13 | Widget base + clean | PARTIAL -- layout left-biased |
 | 10.6.0 | 04-13 | Remove HUD spacer | FAIL -- half-screen |
 | 10.7.0 | 04-13 | FloatLayout wrapper | FAIL -- spec not updated |
-| 10.8.0 | 04-14 | Remove ScreenManager + fullscreen=1 + preflight | BUILDING |
+| 10.8.0 | 04-14 | Remove ScreenManager + fullscreen=1 + preflight + debug label | OK on phone, broken on MuMu |
+| 10.9.0 | 04-14 | Remove FloatLayout, App.build() returns BoxLayout directly | OK -- phone verified, MuMu is emulator bug |
 
 ---
 
@@ -365,7 +387,26 @@ preflight checks: version match, architecture, dangerous patterns, file integrit
 12. NEVER write spec via Python with %% escaping (v10.8)
 13. icon/presplash use ./icon.png not %(source.dir)s (v10.8)
 14. Use android.archs (plural) not android.arch (v10.8)
+15. NEVER trust MuMu/LDPlayer/BlueStacks for layout verification -- use REAL PHONE (v10.9)
+16. NEVER blindly fix bugs without diagnostic data -- add debug labels first (v10.9)
+17. When layout looks wrong, check debug panel FIRST: does self.width == Window.width? (v10.9)
+18. ALWAYS include diagnostic label in App showing version, Window size, widget size, density
 
 ---
 
-> 8 builds, 11 failures. Read Section 0 and 2 before EVERY build.
+## 12. Test Environment Rules (v4.0)
+
+| Environment | Use for | NOT for |
+|-------------|---------|---------|
+| PC `python main.py` | UI logic, interaction flow, visual design | Final Android verification |
+| Real Android phone | **Final verification, layout, touch, font** | -- (this is the gold standard) |
+| MuMu / LDPlayer / BlueStacks | Install test, crash test, startup test | **Layout, sizing, DPI, rendering** |
+
+> Kivy SDL2 + PC Android emulator = DPI mismatch.
+> The emulator's physical resolution and Kivy's logical Window size do not align.
+> This causes widgets to render in only part of the screen, which is NOT a code bug.
+
+---
+
+> 10 builds, v10.0~v10.9. Read Section 0 and 2 before EVERY build.
+> The biggest lesson: wrong test environment = solving nonexistent problems.

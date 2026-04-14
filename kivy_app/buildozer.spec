@@ -1,5 +1,5 @@
 [app]
-title = 易CODE
+title = YiCODE
 package.name = yicode
 package.domain = org.yicode
 
@@ -7,7 +7,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,otf
 source.include_patterns = iching_data.py,yaoci_data.py,NotoSansCJK.otf,icon.png,presplash.png
 
-version = 11.0.0
+version = 11.1.0
 
 requirements = python3,kivy,pillow
 
@@ -24,7 +24,7 @@ android.ndk = 25b
 android.ndk_api = 21
 android.private_storage = True
 android.accept_sdk_license = True
-android.arch = arm64-v8a
+android.archs = arm64-v8a
 
 [buildozer]
 log_level = 2

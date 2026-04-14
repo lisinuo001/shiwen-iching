@@ -613,7 +613,7 @@ class MainPage(BoxLayout):
         from kivy.metrics import Metrics
         d = Metrics.density
         sw, sh = self.width, self.height
-        self._dbg.text = f"v11.0 | Win {ww}x{wh} | self {sw:.0f}x{sh:.0f} | d={d:.1f}"
+        self._dbg.text = f"v11.1 | Win {ww}x{wh} | self {sw:.0f}x{sh:.0f} | d={d:.1f}"
 
     def _on_done(self):
         if self._casting: return

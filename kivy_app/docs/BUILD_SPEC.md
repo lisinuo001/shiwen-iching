@@ -1,8 +1,8 @@
 # 出包规范 BUILD_SPEC
 
-> 版本: v4.0 (v10.0~v10.9 全部教训 + MuMu 模拟器事件 + 测试环境规范)  
+> 版本: v5.0 (v10.0~v11.0 全部教训 + 本地开发环境 + 品牌更名)  
 > 更新日期: 2026-04-14  
-> 适用项目: 天机 TianJi (Kivy Android APK)  
+> 适用项目: 易CODE YiCODE (Kivy Android APK)  
 > 状态: ACTIVE
 
 ---
@@ -30,7 +30,7 @@ GitHub Actions cloud build. No local Linux needed.
 | Trigger | push to main/master, or manual workflow_dispatch |
 | Runner | ubuntu-22.04 |
 | Timeout | 60 min |
-| Artifact | Actions -> run -> Artifacts -> TianJi-APK-vX.Y.Z |
+| Artifact | Actions -> run -> Artifacts -> YiCODE-APK-vX.Y.Z |
 | Retention | 30 days |
 | Full build time | ~25-35 min |
 
@@ -42,7 +42,7 @@ GitHub Actions cloud build. No local Linux needed.
 
 > PC OK != Phone OK. All rules from real failures.
 
-- [ ] main.py runs with `py -3.11 main.py`, no crash
+- [ ] main.py runs with Python 3.11 local preview (see Section 13), no crash
 - [ ] NO ScreenManager/Screen -- pages inherit BoxLayout directly
 - [ ] Interactive widgets (buttons, slots) inherit Widget, NOT BoxLayout
 - [ ] Widget text uses `add_widget(Label)` + `bind(pos, size)` + `_layout()` manual positioning
@@ -60,7 +60,7 @@ GitHub Actions cloud build. No local Linux needed.
 ### 2.3 Config Check
 
 - [ ] buildozer.spec version updated
-- [ ] title is ASCII-only (e.g. `tianji`), Chinese name set via `get_application_name()`
+- [ ] title supports UTF-8 (e.g. `易CODE`), buildozer handles encoding
 - [ ] buildozer.spec is PURE ASCII, NO BOM, LF line endings
   - Reason: PowerShell Set-Content writes UTF-8 BOM, configparser cannot parse BOM files
 - [ ] icon.filename and presplash.filename use `./icon.png` (NOT `%(source.dir)s/icon.png`)
@@ -97,17 +97,17 @@ GitHub Actions cloud build. No local Linux needed.
 
 ```
 kivy_app/buildozer.spec         -> version = X.Y.Z
-.github/workflows/build-apk.yml -> artifact name = TianJi-APK-vX.Y.Z
+.github/workflows/build-apk.yml -> artifact name = YiCODE-APK-vX.Y.Z
 .github/workflows/build-apk.yml -> Expected version: X.Y.Z
 ```
 
 Version rule: X=major, Y=minor, Z=patch
 
-### Step 2: Local test
+### Step 2: Local test (see Section 13 for environment details)
 
 ```bash
 cd d:\snow\iching\kivy_app
-py -3.11 main.py
+"C:\Users\lisinuo\AppData\Local\Programs\Python\Python311\python.exe" main.py
 ```
 
 ### Step 2.5: Review Agent audit (recommended)
@@ -313,7 +313,9 @@ DO NOT change without testing:
 - [ ] "New divination" works
 - [ ] Portrait locked, no crash
 - [ ] Chinese font renders correctly
-- [ ] Debug label visible: `v10.8 | Win WxH | density=X`
+- [ ] Debug label hidden by default (tap title 5x to toggle)
+- [ ] Six yao collapsible section works (expand/collapse, no blank space on collapse)
+- [ ] Card-based result layout: Hero -> Guaxiang -> Baihua -> Yao(collapsed)
 
 ---
 
@@ -326,15 +328,17 @@ d:\snow\iching\
   yaoci_data.py                      -- yao text data
   kivy_app/
     main.py                          -- main program
-    buildozer.spec                   -- config (ASCII only!)
+    buildozer.spec                   -- config
     preflight_check.py               -- auto QA gate (ASCII only!)
-    gen_icon.py                      -- icon generator
+    gen_icon.py                      -- icon/splash generator (cyan+purple neon taiji)
     NotoSansCJK.otf                  -- CJK font
-    icon.png                         -- app icon 512x512
+    icon.png                         -- app icon 512x512 (AI-generated cyberpunk taiji)
+    presplash.png                    -- splash screen 1080x1920
     docs/
       BUILD_SPEC.md                  -- this file
       MOBILE_COMPAT_SPEC.md          -- Kivy Android rules
       REVIEW_AGENT_GUIDE.md          -- review agent setup
+      BASELINE_v10.9.md              -- v10.9 visual freeze baseline
 ```
 
 ---
@@ -355,6 +359,7 @@ d:\snow\iching\
 | 10.7.0 | 04-13 | FloatLayout wrapper | FAIL -- spec not updated |
 | 10.8.0 | 04-14 | Remove ScreenManager + fullscreen=1 + preflight + debug label | OK on phone, broken on MuMu |
 | 10.9.0 | 04-14 | Remove FloatLayout, App.build() returns BoxLayout directly | OK -- phone verified, MuMu is emulator bug |
+| 11.0.0 | 04-14 | Rebrand to 易CODE, card-based result page, collapsible yao, new cyber icon/splash, hidden debug toggle | PENDING |
 
 ---
 
@@ -391,6 +396,9 @@ preflight checks: version match, architecture, dangerous patterns, file integrit
 16. NEVER blindly fix bugs without diagnostic data -- add debug labels first (v10.9)
 17. When layout looks wrong, check debug panel FIRST: does self.width == Window.width? (v10.9)
 18. ALWAYS include diagnostic label in App showing version, Window size, widget size, density
+19. NEVER use scanlines/stripe overlay on icon — kills clarity on small screens (v11.0)
+20. Icon fish-eyes MUST be opposite color of their half (yin dot in yang, yang dot in yin) (v11.0)
+21. buildozer.spec title field supports Chinese (e.g. `易CODE`), no need for ASCII workaround
 
 ---
 
@@ -408,5 +416,49 @@ preflight checks: version match, architecture, dangerous patterns, file integrit
 
 ---
 
-> 10 builds, v10.0~v10.9. Read Section 0 and 2 before EVERY build.
-> The biggest lesson: wrong test environment = solving nonexistent problems.
+## 13. Local Development Environment (IMPORTANT — READ FIRST)
+
+> This machine has MULTIPLE Python versions. Using the wrong one wastes time.
+> This section exists because we repeatedly wasted rounds discovering this.
+
+### Python versions on this machine (d:\snow)
+
+| Path | Version | Use for |
+|------|---------|---------|
+| `C:\Python27\python.exe` | 2.7 | **DO NOT USE** — too old for Kivy |
+| `C:\Users\lisinuo\AppData\Local\Programs\Python\Python311\python.exe` | **3.11** | **LOCAL KIVY PREVIEW** — Kivy 2.3.1 installed here |
+| `python3` (WindowsApps) | 3.14 | gen_icon.py, preflight_check.py — but Kivy NOT installable (too new, deps missing) |
+
+### Rules
+
+1. **Local Kivy preview** MUST use Python 3.11:
+   ```bash
+   "C:\Users\lisinuo\AppData\Local\Programs\Python\Python311\python.exe" main.py
+   ```
+2. **gen_icon.py / preflight_check.py** can use `python3` (3.14) since they only need Pillow
+3. **GitHub Actions build** uses Python 3.10 (frozen, do not change)
+4. **NEVER** run `pip install kivy` without specifying Python version — default `pip` points to Python 2.7
+5. Correct install command: `"C:\...\Python311\python.exe" -m pip install kivy`
+
+### Kivy installed packages (Python 3.11)
+
+- kivy 2.3.1
+- kivy-deps.angle 0.4.0
+- kivy-deps.sdl2 0.8.0
+- kivy-deps.glew 0.3.1
+
+### Data files for local preview
+
+Before running `main.py` locally, copy data files:
+```bash
+cd d:\snow\iching\kivy_app
+copy ..\iching_data.py .
+copy ..\yaoci_data.py .
+```
+
+---
+
+> 11 builds, v10.0~v11.0. Read Section 0, 2, and 13 before EVERY session.
+> The biggest lessons:
+> 1. Wrong test environment = solving nonexistent problems.
+> 2. Wrong Python version = wasted rounds. Always use Python 3.11 for Kivy preview.

@@ -585,10 +585,11 @@ class MainPage(BoxLayout):
         self.add_widget(rst)
 
     def _update_dbg(self, *_):
-        w, h = Window.width, Window.height
+        ww, wh = Window.width, Window.height
         from kivy.metrics import Metrics
         d = Metrics.density
-        self._dbg.text = f"v10.8 | Win {w}x{h} | density={d:.1f} | dp100={dp(100):.0f}"
+        sw, sh = self.width, self.height
+        self._dbg.text = f"v10.9 | Win {ww}x{wh} | self {sw:.0f}x{sh:.0f} | d={d:.1f}"
 
     def _on_done(self):
         if self._casting: return
@@ -758,32 +759,33 @@ class ResultPage(BoxLayout):
             h.text = f"[color=#9e66fa]{YN[i]}[/color]  [color={c}][{v}] {t}[/color]"
             b.text = f"[color=#ffd633]{yc}[/color]\n[color=#8a92a4]{yb}[/color]"
 
-# ---- App (v10.8 - direct BoxLayout page switching, no ScreenManager) ----
+# ---- App (v10.9 - simplest possible root) ----
 class TianJiApp(App):
     def build(self):
         for d in [os.path.dirname(os.path.abspath(__file__)), os.getcwd()]:
             if d: resource_add_path(d)
 
-        from kivy.uix.floatlayout import FloatLayout
-        self._root = FloatLayout()
+        self._main_page = MainPage(app_ref=self)
+        self._result_page = ResultPage(app_ref=self)
 
-        self._main_page = MainPage(app_ref=self, size_hint=(1, 1))
-        self._result_page = ResultPage(app_ref=self, size_hint=(1, 1))
-
-        self._root.add_widget(self._main_page)
+        # Return MainPage directly as root widget.
+        # BoxLayout returned from build() auto-fills the Window.
+        # No FloatLayout wrapper, no ScreenManager, nothing extra.
         self._current = 'main'
-        return self._root
+        return self._main_page
 
     def show_result(self, bits):
         self._result_page.show(bits)
-        self._root.clear_widgets()
-        self._root.add_widget(self._result_page)
+        self.root_window.remove_widget(self.root)
+        self.root = self._result_page
+        self.root_window.add_widget(self._result_page)
         self._current = 'result'
 
     def show_main(self):
         self._main_page._reset()
-        self._root.clear_widgets()
-        self._root.add_widget(self._main_page)
+        self.root_window.remove_widget(self.root)
+        self.root = self._main_page
+        self.root_window.add_widget(self._main_page)
         self._current = 'main'
 
     def get_application_name(self):

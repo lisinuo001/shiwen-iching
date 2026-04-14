@@ -11,8 +11,8 @@ version = 10.8.0
 
 requirements = python3,kivy,pillow
 
-icon.filename = %%(source.dir)s/icon.png
-presplash.filename = %%(source.dir)s/icon.png
+icon.filename = ./icon.png
+presplash.filename = ./icon.png
 
 orientation = portrait
 fullscreen = 1

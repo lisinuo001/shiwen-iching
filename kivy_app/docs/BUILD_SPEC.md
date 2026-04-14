@@ -358,7 +358,10 @@ d:\snow\iching\
 | 10.2.0 | 04-10 | 太极 icon、改名天机 | ❌ 实际安装的仍是 10.3 旧包 |
 | 10.3.0 | 04-10 | 修 native Label | ❌ 缓存导致未真正编译 |
 | 10.4.0 | 04-13 | 修 touch 事件 + HUD 装饰 | ❌ 缓存导致未真正编译 |
-| 10.5.0 | 04-13 | Widget 基类 + 手动定位 + 清缓存 | � 首次全量重编 |
+| 10.5.0 | 04-13 | Widget 基类 + 手动定位 + 清缓存 | ⚠️ 首次全量重编，但布局仍偏左 |
+| 10.6.0 | 04-13 | 去掉 HUD spacer，爻位 size_hint_y=1 | ❌ 布局仍只占半屏 |
+| 10.7.0 | 04-13 | FloatLayout wrapper + 显式 size_hint | ❌ spec 文件未实际更新 |
+| 10.8.0 | 04-13 | 删除 ScreenManager，直接 BoxLayout 页面 + fullscreen=1 | ⏳ 构建中 |
 
 ---
 

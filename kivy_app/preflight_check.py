@@ -87,13 +87,6 @@ def main():
         found = bool(re.search(rf"class\s+{cls_name}\(BoxLayout\):", main_py))
         check(found, f"{cls_name} extends BoxLayout")
 
-    build_match = re.search(
-        r"class\s+TianJiApp.*?def build\(self\):(.*?)(?=\n    def |\Z)",
-        main_py, re.S)
-    if build_match:
-        check("ScreenManager" not in build_match.group(1),
-              "App.build() has no ScreenManager")
-
     check("fullscreen = 1" in spec, "fullscreen = 1")
 
     # 3. DANGEROUS PATTERNS

@@ -303,9 +303,86 @@ lbl.bind(texture_size=lbl.setter('size'))  # 高度跟随内容
 
 ---
 
-## 七、调试技巧
+## 七、调试与诊断规范
 
-### 7.1 PC 模拟手机分辨率
+> **核心原则：禁止盲改。没有诊断数据支撑的代码修改不允许提交。**
+>
+> v10.5~v10.8 连续 4 个版本修不好同一个布局 bug，根因是每次都在"猜"而不是"测"。
+> v10.8 加了调试标签后，一张截图就定位了 FloatLayout 的问题。
+
+### 7.1 内置诊断面板（必须常驻）
+
+App 中必须内置调试信息标签，显示以下数据：
+
+```python
+# 调试标签模板（放在页面最顶部）
+self._dbg = Label(
+    text="", font_size=sp(9), size_hint=(1, None), height=dp(14),
+    halign='left', valign='middle', color=[0.4, 0.4, 0.5, 0.6])
+self._dbg.bind(size=lambda w,s: setattr(w,'text_size',s))
+
+# 延迟更新（等布局完成后再读取尺寸）
+Clock.schedule_once(self._update_dbg, 0.5)
+
+def _update_dbg(self, *_):
+    from kivy.metrics import Metrics
+    self._dbg.text = (
+        f"v{VERSION} | "
+        f"Win {Window.width}x{Window.height} | "
+        f"self {self.width:.0f}x{self.height:.0f} | "
+        f"d={Metrics.density:.1f}"
+    )
+```
+
+**必须显示的信息：**
+
+| 信息 | 用途 |
+|------|------|
+| 版本号 | 确认是否安装了正确的包 |
+| Window 尺寸 | 确认 Kivy 获取的屏幕尺寸是否正确 |
+| Root widget 尺寸 | 确认根 widget 是否撑满了 Window |
+| density | 确认 dp() 转换系数 |
+
+**用户截图时只需截一张图，开发者就能精确判断问题在哪一层。**
+
+### 7.2 分层排查法（不准跳步）
+
+遇到布局异常时，**必须从外到内逐层确认**，不准跳步直接改内部组件：
+
+```
+第1层：Window 尺寸是否正确？
+  → 不正确：检查 fullscreen 设置、Kivy 版本
+  → 正确：继续
+
+第2层：Root widget (App.build 返回值) 尺寸是否等于 Window？
+  → 不等于：检查 root 的 size_hint、是否有中间层（FloatLayout 等）
+  → 等于：继续
+
+第3层：页面容器 (MainPage) 尺寸是否等于 Root？
+  → 不等于：检查容器的 size_hint、padding
+  → 等于：继续
+
+第4层：子 widget (按钮、爻位) 尺寸是否正确？
+  → 不正确：检查该 widget 的 size_hint_x 和 _layout() 实现
+  → 正确：问题不在布局，检查 canvas 绘制坐标
+```
+
+**每一层的判断依据来自调试面板数据，不是目测截图。**
+
+### 7.3 每次提交必须带验证指标
+
+提交代码修改时，commit message 或 PR 中必须写明：
+
+```
+本次修改：删除 FloatLayout wrapper，App.build() 直接返回 BoxLayout
+验证指标：调试面板中 self 宽度 == Window 宽度
+预期结果：按钮和爻位撑满屏幕宽度
+失败判定：self 宽度 < Window 宽度，说明 root widget 未撑满
+```
+
+**没有验证指标的布局修改禁止提交。**
+
+### 7.4 PC 模拟手机分辨率
 
 ```python
 if __name__ == "__main__":
@@ -313,24 +390,42 @@ if __name__ == "__main__":
     # 注意：这行只在 __main__ 块中，不影响 Android
 ```
 
-### 7.2 远程调试 Android 日志
+### 7.5 远程调试 Android 日志
 
 ```bash
 # 手机连 USB，开启开发者模式
 adb logcat -s python:* kivy:*
 ```
 
-### 7.3 常见 Android 崩溃排查
+### 7.6 常见 Android 崩溃排查
 
-| 现象 | 可能原因 |
-|------|---------|
-| 启动闪退 | 字体文件未打包、import 失败 |
-| 白屏 | 首帧 layout 异常、canvas 绘制崩溃 |
-| 文字乱码 | 未注册中文字体 |
-| 文字在左下角 | 使用了 CoreLabel canvas 绘制 |
-| 按钮无反应 | 继承了 BoxLayout，touch 被子 widget 拦截 |
-| 边框位置错误 | canvas.before 坐标与 widget pos 不同步 |
-| 上半部分空白 | 不可见 Widget 占了 size_hint_y=1 |
+| 现象 | 可能原因 | 诊断方法 |
+|------|---------|---------|
+| 启动闪退 | 字体文件未打包、import 失败 | adb logcat |
+| 白屏 | 首帧 layout 异常、canvas 绘制崩溃 | adb logcat |
+| 文字乱码 | 未注册中文字体 | 检查 source.include_patterns |
+| 文字在左下角 | 使用了 CoreLabel canvas 绘制 | 搜索 CoreLabel 在 __init__ 中的使用 |
+| 按钮无反应 | 继承了 BoxLayout，touch 被子 widget 拦截 | 检查基类 |
+| 边框位置错误 | canvas.before 坐标与 widget pos 不同步 | 检查 _layout() 是否统一更新 |
+| 上半部分空白 | 不可见 Widget 占了 size_hint_y=1 | 检查所有 add_widget |
+| 内容只占半屏宽度 | 中间层（FloatLayout/Screen）未正确传递 size_hint | **查调试面板 self vs Window 宽度** |
+| 版本号不对 | 缓存/spec 未更新 | **查调试面板版本号** |
+
+### 7.7 诊断数据驱动的修复案例
+
+**v10.8 案例（正面教材）：**
+- 截图调试信息：`Win 390x844 | density=1.4 | dp100=142`
+- 分析：Window 尺寸正确，但 UI 只占 ~60% 宽度
+- 推断：Root widget 没有撑满 Window → 中间有 FloatLayout 层
+- 修复：删除 FloatLayout，直接返回 BoxLayout
+- **一次定位，一次修复（如果数据充分的话）**
+
+**v10.5~v10.7 案例（反面教材）：**
+- 没有调试信息，只能看截图"按钮太窄"
+- 猜测1：Screen/RelativeLayout 的问题 → 改了 → 没用
+- 猜测2：size_hint 没设 → 改了 → 没用
+- 猜测3：FloatLayout wrapper → 改了 → spec 没更新
+- **三次盲猜，三次失败，浪费 90 分钟构建时间**
 
 ---
 
@@ -346,8 +441,36 @@ adb logcat -s python:* kivy:*
 - [ ] `on_touch_down` 使用 `collide_point` 检查范围
 - [ ] `BoxLayout` 仅用于页面级容器，不用于交互组件
 - [ ] PC 测试通过后，**不要假设手机也正常**
+- [ ] **调试面板存在且显示版本号、Window/Widget 尺寸**
+- [ ] **提交带有明确的验证指标**
 
 ---
 
-> ⚠️ 本文档是 7 轮失败的结晶。下次开新 Kivy 项目时，先读这份文档再动手。  
-> ⚠️ 遇到新的适配问题，务必追加到对应章节。
+## 九、开发纪律
+
+> 以下规则来自 v10.0~v10.9 共 9 个版本的反复失败。
+
+### 9.1 禁止盲改
+
+没有诊断数据支撑的代码修改不允许提交。"看截图觉得像是 XX 的问题"不算诊断数据。
+
+### 9.2 调试面板常驻
+
+调试信息标签必须始终存在于 App 中。可以做得很小很淡（sp(9)、半透明），但不能删除。
+
+### 9.3 每次提交带验证指标
+
+格式：`修改了什么 → 验证什么数据 → 预期结果 → 失败判定`。
+
+### 9.4 分层排查不跳步
+
+从 Window → Root → 容器 → 子 widget，逐层确认。哪层数据不对就改哪层。
+
+### 9.5 构建前必过质检
+
+preflight_check.py 通过后才允许 buildozer 运行。
+
+---
+
+> 本文档是 9 个版本失败的结晶。下次开新 Kivy 项目时，先读这份文档再动手。
+> 遇到新的适配问题，务必追加到对应章节。

@@ -721,7 +721,23 @@ class CollapsibleSection(BoxLayout):
         else:
             self.remove_widget(self._content)
         self._draw_hdr()
+        # Force parent ScrollView to recalculate content size
+        Clock.schedule_once(self._force_scroll_update, 0.05)
         return True
+
+    def _force_scroll_update(self, *_):
+        """Walk up to find ScrollView and reset scroll position if needed."""
+        p = self.parent
+        while p:
+            if isinstance(p, ScrollView):
+                # Clamp scroll_y to valid range to prevent blank space
+                p.scroll_y = min(p.scroll_y, 1.0)
+                # Trigger re-layout by touching the inner container
+                if hasattr(p, 'children') and p.children:
+                    inner = p.children[0]
+                    inner.height = inner.height  # force recalc
+                break
+            p = p.parent
 
 # ========== WATERMARK LAYER (v11.0) ==========
 class WatermarkLayer(Widget):
@@ -820,19 +836,7 @@ class ResultPage(BoxLayout):
         hero_card.add_widget(hero_inner)
         outer.add_widget(hero_card)
 
-        # == CARD 2: Baihua (vernacular interpretation) - PRIORITY ==
-        bh_card = CardBox(accent_col=GREEN[:3])
-        bh_hdr = Label(
-            text="[color=#4deb66]\u25cf[/color] [b][color=#4deb66]\u767d\u8bdd\u89e3\u8bfb[/color][/b]  [color=#66708a]INTERPRETATION[/color]",
-            markup=True, font_name=CN, font_size=sp(14),
-            size_hint_y=None, height=dp(26), halign='left', valign='middle')
-        bh_hdr.bind(size=lambda w, s: setattr(w, 'text_size', s))
-        bh_card.add_widget(bh_hdr)
-        self._bh = self._clbl(sp(17))
-        bh_card.add_widget(self._bh)
-        outer.add_widget(bh_card)
-
-        # == CARD 3: Guaxiang (hexagram meaning) ==
+        # == CARD 2: Guaxiang (hexagram meaning) ==
         desc_card = CardBox(accent_col=CYAN[:3])
         desc_hdr = Label(
             text="[color=#00def2]\u25cf[/color] [b][color=#00def2]\u5366\u8c61\u542b\u4e49[/color][/b]  [color=#66708a]HEXAGRAM MEANING[/color]",
@@ -843,6 +847,18 @@ class ResultPage(BoxLayout):
         self._desc = self._clbl(sp(15))
         desc_card.add_widget(self._desc)
         outer.add_widget(desc_card)
+
+        # == CARD 3: Baihua (vernacular interpretation) ==
+        bh_card = CardBox(accent_col=GREEN[:3])
+        bh_hdr = Label(
+            text="[color=#4deb66]\u25cf[/color] [b][color=#4deb66]\u767d\u8bdd\u89e3\u8bfb[/color][/b]  [color=#66708a]INTERPRETATION[/color]",
+            markup=True, font_name=CN, font_size=sp(14),
+            size_hint_y=None, height=dp(26), halign='left', valign='middle')
+        bh_hdr.bind(size=lambda w, s: setattr(w, 'text_size', s))
+        bh_card.add_widget(bh_hdr)
+        self._bh = self._clbl(sp(17))
+        bh_card.add_widget(self._bh)
+        outer.add_widget(bh_card)
 
         # == CARD 4: Yao details (collapsible) ==
         self._yao_section = CollapsibleSection(

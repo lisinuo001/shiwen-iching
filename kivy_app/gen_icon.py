@@ -9,125 +9,138 @@ import math, os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+def _rounded_rect_mask(size, radius):
+    """Create a rounded rectangle alpha mask."""
+    mask = Image.new("L", (size, size), 0)
+    d = ImageDraw.Draw(mask)
+    d.rounded_rectangle([(0, 0), (size - 1, size - 1)], radius=radius, fill=255)
+    return mask
+
+
 def gen_icon(size=512):
-    """Generate a clean, high-contrast cyberpunk taiji icon with proper S-curve."""
-    img = Image.new("RGBA", (size, size), (15, 17, 25, 255))
+    """Generate a cyberpunk rounded-square icon with taiji + HUD elements."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     cx, cy = size // 2, size // 2
-    R = int(size * 0.42)  # main circle radius (slightly larger)
-    hr = R // 2            # half-radius for S-curve semicircles
+    corner_r = size // 5  # rounded corner radius
 
-    # Background: subtle radial gradient
-    for i in range(size):
-        for j in range(size):
-            d = math.sqrt((i - cx)**2 + (j - cy)**2) / (size * 0.7)
-            v = max(0, int(18 - d * 14))
-            img.putpixel((i, j), (v + 8, v + 10, v + 18, 255))
+    # --- Rounded square background with gradient ---
+    for py in range(size):
+        for px in range(size):
+            d = math.sqrt((px - cx)**2 + (py - cy)**2) / (size * 0.7)
+            d = min(d, 1.0)
+            r = int(12 + 10 * (1 - d))
+            g = int(14 + 8 * (1 - d))
+            b = int(22 + 14 * (1 - d))
+            img.putpixel((px, py), (r, g, b, 255))
 
-    # --- Classic Taiji using polar angle method ---
-    # The S-curve boundary is defined by:
-    #   - In the top half (dy < 0): the boundary curves around a semicircle
-    #     centered at (cx, cy - hr), radius hr
-    #   - In the bottom half (dy >= 0): the boundary curves around a semicircle
-    #     centered at (cx, cy + hr), radius hr
-    # A point is "yang" (cyan) if it is on the LEFT side of the S-curve.
+    # --- Taiji circle ---
+    R = int(size * 0.30)   # taiji radius (smaller, leaves room for HUD)
+    hr = R // 2
+    taiji_cy = cy - size // 20  # slightly above center
 
     for px in range(cx - R - 1, cx + R + 2):
-        for py in range(cy - R - 1, cy + R + 2):
-            dx, dy = px - cx, py - cy
+        for py in range(taiji_cy - R - 1, taiji_cy + R + 2):
+            if px < 0 or px >= size or py < 0 or py >= size:
+                continue
+            dx, dy = px - cx, py - taiji_cy
             dist_sq = dx * dx + dy * dy
             if dist_sq > R * R:
                 continue
 
-            # Distance from upper and lower semicircle centers
             d_up = math.sqrt(dx * dx + (dy + hr) ** 2)
             d_lo = math.sqrt(dx * dx + (dy - hr) ** 2)
 
-            # Classic taiji S-curve logic:
-            #   Upper half: left is yang, except inside upper semicircle (yin lobe)
-            #   Lower half: left is yin, except inside lower semicircle (yang lobe)
+            # S-curve logic
             if dy <= 0:
-                if d_up <= hr:
-                    is_yang = False  # yin lobe curving into upper half
-                else:
-                    is_yang = (dx < 0)  # left side = yang
+                is_yang = False if d_up <= hr else (dx < 0)
             else:
-                if d_lo <= hr:
-                    is_yang = True   # yang lobe curving into lower half
-                else:
-                    is_yang = (dx < 0)  # left side = yang (continues from top)
+                is_yang = True if d_lo <= hr else (dx < 0)
 
             dist = math.sqrt(dist_sq)
-            edge_fade = min(1.0, (R - dist) / max(1, R * 0.03))  # anti-alias edge
+            edge_fade = min(1.0, (R - dist) / max(1, R * 0.04))
 
             if is_yang:
-                # Cyan side with subtle gradient (brighter near center)
+                # Neon cyan with glow gradient
                 t = 1 - dist / R
-                br = 0.75 + 0.25 * t
-                g_val = int(222 * br * edge_fade)
-                b_val = int(242 * br * edge_fade)
-                r_val = int(10 * br * edge_fade)
-                img.putpixel((px, py), (r_val, g_val, b_val, 255))
+                br = 0.70 + 0.30 * t
+                img.putpixel((px, py), (
+                    int(0 * br * edge_fade),
+                    int(210 * br * edge_fade),
+                    int(235 * br * edge_fade), 255))
             else:
-                # Dark side
+                # Deep dark with slight purple tint (more cyber)
                 t = 1 - dist / R
-                br = 0.15 + 0.20 * t
-                v = int(50 * br * edge_fade)
-                img.putpixel((px, py), (v, v + 1, v + 5, 255))
+                br = 0.12 + 0.18 * t
+                v = int(40 * br * edge_fade)
+                img.putpixel((px, py), (
+                    v + int(8 * br),
+                    v,
+                    v + int(15 * br), 255))
 
-    # --- Fish eyes ---
-    eye_r = int(R * 0.11)  # ~11% of main radius
+    # --- Fish eyes (CORRECT: opposite color in each half) ---
+    eye_r = int(R * 0.13)
 
-    # Yin eye (dark dot) in yang (cyan) half — upper-left area, at (cx, cy - hr)
-    eye_cx_yin, eye_cy_yin = cx, cy - hr
-    for px in range(eye_cx_yin - eye_r - 1, eye_cx_yin + eye_r + 2):
-        for py in range(eye_cy_yin - eye_r - 1, eye_cy_yin + eye_r + 2):
-            dx, dy = px - eye_cx_yin, py - eye_cy_yin
+    # Dark eye in YANG (cyan) half — at (cx, taiji_cy - hr)
+    ey_dark_cx, ey_dark_cy = cx, taiji_cy - hr
+    for px in range(ey_dark_cx - eye_r - 1, ey_dark_cx + eye_r + 2):
+        for py in range(ey_dark_cy - eye_r - 1, ey_dark_cy + eye_r + 2):
+            if px < 0 or px >= size or py < 0 or py >= size:
+                continue
+            dx, dy = px - ey_dark_cx, py - ey_dark_cy
             d = math.sqrt(dx*dx + dy*dy)
             if d <= eye_r:
                 fade = 1 - d / eye_r
-                # Sphere-like shading (darker at edges, slightly lighter center)
-                v = int(22 + 20 * fade)
-                img.putpixel((px, py), (v, v + 1, v + 3, 255))
+                # Dark purple dot (yin in yang)
+                v = int(18 + 12 * fade)
+                img.putpixel((px, py), (v + 5, v, v + 10, 255))
 
-    # Yang eye (bright dot) in yin (dark) half — lower-right area, at (cx, cy + hr)
-    eye_cx_yang, eye_cy_yang = cx, cy + hr
-    for px in range(eye_cx_yang - eye_r - 1, eye_cx_yang + eye_r + 2):
-        for py in range(eye_cy_yang - eye_r - 1, eye_cy_yang + eye_r + 2):
-            dx, dy = px - eye_cx_yang, py - eye_cy_yang
+    # Bright eye in YIN (dark) half — at (cx, taiji_cy + hr)
+    ey_bright_cx, ey_bright_cy = cx, taiji_cy + hr
+    for px in range(ey_bright_cx - eye_r - 1, ey_bright_cx + eye_r + 2):
+        for py in range(ey_bright_cy - eye_r - 1, ey_bright_cy + eye_r + 2):
+            if px < 0 or px >= size or py < 0 or py >= size:
+                continue
+            dx, dy = px - ey_bright_cx, py - ey_bright_cy
             d = math.sqrt(dx*dx + dy*dy)
             if d <= eye_r:
                 fade = 1 - d / eye_r
-                g_val = int(160 + 62 * fade)
-                b_val = int(180 + 62 * fade)
+                # Bright cyan dot (yang in yin)
+                g_val = int(180 + 42 * fade)
+                b_val = int(210 + 32 * fade)
                 img.putpixel((px, py), (0, g_val, b_val, 255))
 
-    # --- Outer glow rings ---
-    for ring_r in range(R + 18, R + 6, -1):
-        alpha = int(18 * (1 - (ring_r - R - 6) / 12))
-        draw.ellipse([cx - ring_r, cy - ring_r, cx + ring_r, cy + ring_r],
+    # --- Taiji border (neon glow) ---
+    for ring_r in range(R + 8, R + 2, -1):
+        alpha = int(40 * (1 - (ring_r - R - 2) / 6))
+        draw.ellipse([cx - ring_r, taiji_cy - ring_r,
+                       cx + ring_r, taiji_cy + ring_r],
                      outline=(0, 222, 242, max(0, alpha)), width=2)
+    draw.ellipse([cx - R - 1, taiji_cy - R - 1, cx + R + 1, taiji_cy + R + 1],
+                 outline=(0, 222, 242, 200), width=2)
 
-    # --- Clean main circle border ---
-    draw.ellipse([cx - R - 1, cy - R - 1, cx + R + 1, cy + R + 1],
-                 outline=(0, 222, 242, 230), width=3)
-
-    # --- Corner chamfer brackets (cyberpunk) ---
-    m = size // 7
-    mw = 2
-    mc = (0, 222, 242, 140)
-    p = 6  # padding from edge
+    # --- HUD corner brackets (cyberpunk signature) ---
+    m = size // 6
+    mw = 3
+    mc = (0, 222, 242, 180)
+    p = size // 16
     draw.line([(p, p + m), (p, p), (p + m, p)], fill=mc, width=mw)
     draw.line([(size - p - m, p), (size - p, p), (size - p, p + m)], fill=mc, width=mw)
     draw.line([(p, size - p - m), (p, size - p), (p + m, size - p)], fill=mc, width=mw)
     draw.line([(size - p - m, size - p), (size - p, size - p), (size - p, size - p - m)], fill=mc, width=mw)
 
-    # --- Subtle "YiCORE" text below circle ---
+    # --- Horizontal scan lines across the taiji (subtle cyber texture) ---
+    for sy in range(taiji_cy - R, taiji_cy + R, 6):
+        if 0 <= sy < size:
+            draw.line([(cx - R, sy), (cx + R, sy)],
+                      fill=(0, 222, 242, 8), width=1)
+
+    # --- "YiCORE" text at bottom ---
     try:
         font_path = os.path.join(HERE, "NotoSansCJK.otf")
-        font_tiny = ImageFont.truetype(font_path, size // 20)
+        font_label = ImageFont.truetype(font_path, size // 14)
     except Exception:
-        font_tiny = ImageFont.load_default()
+        font_label = ImageFont.load_default()
 
     def _tw_icon(text, font):
         try:
@@ -137,12 +150,30 @@ def gen_icon(size=512):
             w, h = draw.textsize(text, font=font)
             return w
 
-    txt = "YiCORE"
-    tw = _tw_icon(txt, font_tiny)
-    draw.text((cx - tw // 2, cy + R + 16), txt,
-              fill=(0, 222, 242, 80), font=font_tiny)
+    txt = "\u6613CORE"
+    tw = _tw_icon(txt, font_label)
+    text_y = taiji_cy + R + size // 16
+    # Text glow
+    draw.text((cx - tw // 2, text_y), txt,
+              fill=(0, 222, 242, 200), font=font_label)
 
-    return img.convert("RGB")
+    # --- Tiny decorative dots ---
+    dot_c = (0, 222, 242, 100)
+    dot_r = 2
+    for dx_off in [-R - 15, R + 15]:
+        draw.ellipse([cx + dx_off - dot_r, taiji_cy - dot_r,
+                       cx + dx_off + dot_r, taiji_cy + dot_r], fill=dot_c)
+
+    # --- Apply rounded rectangle mask ---
+    try:
+        mask = _rounded_rect_mask(size, corner_r)
+        # Compose: rounded icon over transparent
+        result = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        result.paste(img, (0, 0), mask)
+        return result.convert("RGB")
+    except Exception:
+        # Fallback if rounded_rectangle not available (older Pillow)
+        return img.convert("RGB")
 
 
 def gen_splash(width=1080, height=1920):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-TIANJI Icon & Splash Generator v2.0
+YiCORE Icon & Splash Generator v2.0
 - Icon: Clean taiji, no scanlines, high contrast, 512x512
 - Splash: Full-screen cyberpunk splash, 1080x1920
 """
@@ -122,7 +122,7 @@ def gen_icon(size=512):
     draw.line([(p, size - p - m), (p, size - p), (p + m, size - p)], fill=mc, width=mw)
     draw.line([(size - p - m, size - p), (size - p, size - p), (size - p, size - p - m)], fill=mc, width=mw)
 
-    # --- Subtle "TIANJI" text below circle ---
+    # --- Subtle "YiCORE" text below circle ---
     try:
         font_path = os.path.join(HERE, "NotoSansCJK.otf")
         font_tiny = ImageFont.truetype(font_path, size // 20)
@@ -137,7 +137,7 @@ def gen_icon(size=512):
             w, h = draw.textsize(text, font=font)
             return w
 
-    txt = "TIANJI"
+    txt = "YiCORE"
     tw = _tw_icon(txt, font_tiny)
     draw.text((cx - tw // 2, cy + R + 16), txt,
               fill=(0, 222, 242, 80), font=font_tiny)
@@ -197,7 +197,7 @@ def gen_splash(width=1080, height=1920):
     draw.line([(width // 6, line_y2), (width * 5 // 6, line_y2)],
               fill=(0, 222, 242, 60), width=1)
 
-    # Title text "天机" - large
+    # Title text "易CORE" - large
     title_y = line_y2 + 60
     try:
         font_path = os.path.join(HERE, "NotoSansCJK.otf")
@@ -218,13 +218,13 @@ def gen_splash(width=1080, height=1920):
             w, h = draw.textsize(text, font=font)
             return w
 
-    # "天机"
-    tw = _tw("天机", font_big)
-    draw.text((cx - tw // 2, title_y), "天机",
+    # "易CORE"
+    tw = _tw("\u6613CORE", font_big)
+    draw.text((cx - tw // 2, title_y), "\u6613CORE",
               fill=(0, 222, 242, 240), font=font_big)
 
-    # "TIANJI DIVINATION SYSTEM"
-    sub_text = "TIANJI DIVINATION SYSTEM"
+    # "YiCORE DIVINATION SYSTEM"
+    sub_text = "YiCORE DIVINATION SYSTEM"
     sw = _tw(sub_text, font_sub)
     draw.text((cx - sw // 2, title_y + 120), sub_text,
               fill=(102, 112, 138, 180), font=font_sub)

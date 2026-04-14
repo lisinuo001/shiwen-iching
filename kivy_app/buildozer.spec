@@ -1,7 +1,7 @@
 [app]
-title = tianji
-package.name = tianji
-package.domain = org.tianji
+title = yicore
+package.name = yicore
+package.domain = org.yicore
 
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,otf

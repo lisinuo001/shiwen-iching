@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 """
-TIANJI Pre-flight Check
+YiCORE Pre-flight Check
 Run before buildozer to block bad builds.
 Exit: 0=pass, 1=fatal
 """
@@ -40,7 +40,7 @@ def read(path):
 
 def main():
     print("=" * 60)
-    print("  TIANJI PRE-FLIGHT CHECK")
+    print("  YiCORE PRE-FLIGHT CHECK")
     print("=" * 60)
 
     main_py = read("main.py")
@@ -62,7 +62,7 @@ def main():
 
     wf = read("../.github/workflows/build-apk.yml")
     if wf:
-        artifact_match = re.search(r"name:\s*TianJi-APK-v([\d.]+)", wf)
+        artifact_match = re.search(r"name:\s*YiCORE-APK-v([\d.]+)", wf)
         artifact_ver = artifact_match.group(1) if artifact_match else "NOT_FOUND"
         print(f"     workflow artifact version = {artifact_ver}")
         check(spec_ver == artifact_ver,

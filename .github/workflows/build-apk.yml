@@ -78,12 +78,12 @@ jobs:
         run: |
           echo "=== APK files ==="
           find . -name "*.apk" -type f -exec ls -la {} \;
-          echo "=== Expected version: 11.1.0 ==="
+          echo "=== Expected version: 1.0.0 ==="
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: YiCODE-APK-v11.1.0
+          name: YiCODE-APK-v1.0.0
           path: kivy_app/bin/*.apk
           retention-days: 30
           if-no-files-found: error

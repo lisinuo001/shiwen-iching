@@ -7,7 +7,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,otf
 source.include_patterns = iching_data.py,yaoci_data.py,NotoSansCJK.otf,icon.png,presplash.png
 
-version = 11.1.0
+version = 1.0.0
 
 requirements = python3,kivy,pillow
 
